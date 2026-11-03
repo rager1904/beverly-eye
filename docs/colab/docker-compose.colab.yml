@@ -1,9 +1,105 @@
-# Small safety/behavior overrides for the interactive Colab demo.
-# Invoke after the repository's base docker-compose.yml.
+# Colab runtimes commonly prohibit Docker bridge networking and iptables.
+# This override runs core services in the Colab VM's host network namespace;
+# local aliases preserve Compose service discovery. Only the frontend is
+# exposed by the notebook's Cloudflare tunnel.
+x-colab-hosts: &colab-hosts
+  - "postgres:127.0.0.1"
+  - "redis:127.0.0.1"
+  - "keycloak:127.0.0.1"
+  - "api-gateway:127.0.0.1"
+  - "emr:127.0.0.1"
+
 services:
-  keycloak-setup:
+  postgres:
+    network_mode: host
+    networks: !reset []
+    ports: !reset []
+    command: ["postgres", "-c", "listen_addresses=127.0.0.1"]
+    extra_hosts: *colab-hosts
+
+  redis:
+    network_mode: host
+    networks: !reset []
+    ports: !reset []
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf", "--bind", "127.0.0.1"]
+    extra_hosts: *colab-hosts
+
+  keycloak:
+    network_mode: host
+    networks: !reset []
+    ports: !reset []
     environment:
-      # The setup script normally writes its generated environment values to
-      # its project .env. Keep Colab's ephemeral credentials out of the source
-      # checkout and the bind-mounted scripts directory.
+      KC_DB_URL: jdbc:postgresql://127.0.0.1:5432/${POSTGRES_DB:-ubuntucare}
+      KC_HTTP_HOST: 127.0.0.1
+    extra_hosts: *colab-hosts
+
+  keycloak-setup:
+    network_mode: host
+    networks: !reset []
+    environment:
       ENV_FILE: /tmp/ubuntucare-colab-keycloak.env
+      KEYCLOAK_SERVER_URL: http://127.0.0.1:8080
+    extra_hosts: *colab-hosts
+
+  migrate:
+    network_mode: host
+    networks: !reset []
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:?}@127.0.0.1:5432/${POSTGRES_DB:-ubuntucare}
+    extra_hosts: *colab-hosts
+
+  api-gateway:
+    network_mode: host
+    networks: !reset []
+    ports: !reset []
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:?}@127.0.0.1:5432/${POSTGRES_DB:-ubuntucare}
+      REDIS_URL: redis://127.0.0.1:6379/0
+      REDIS_HOST: 127.0.0.1
+      KEYCLOAK_SERVER_URL: http://127.0.0.1:8080
+    entrypoint:
+      - python
+      - -m
+      - uvicorn
+      - src.backend.api_gateway.main:app
+      - --host
+      - 127.0.0.1
+      - --port
+      - "8000"
+      - --workers
+      - "1"
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - "*"
+    extra_hosts: *colab-hosts
+
+  emr:
+    network_mode: host
+    networks: !reset []
+    ports: !reset []
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:?}@127.0.0.1:5432/${POSTGRES_DB:-ubuntucare}
+      REDIS_URL: redis://127.0.0.1:6379/0
+      KEYCLOAK_SERVER_URL: http://127.0.0.1:8080
+    entrypoint:
+      - python
+      - -m
+      - uvicorn
+      - src.backend.services.emr.main:app
+      - --host
+      - 127.0.0.1
+      - --port
+      - "8001"
+      - --workers
+      - "1"
+      - --proxy-headers
+    extra_hosts: *colab-hosts
+
+  frontend:
+    network_mode: host
+    networks: !reset []
+    ports: !reset []
+    environment:
+      API_INTERNAL_URL: http://127.0.0.1:8000
+      HOSTNAME: 127.0.0.1
+    extra_hosts: *colab-hosts

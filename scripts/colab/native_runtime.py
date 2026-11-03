@@ -314,7 +314,9 @@ class ColabRuntime:
         for database in ('ubuntucare', 'ubuntucare_keycloak'):
             sql += f"SELECT 'CREATE DATABASE {database} OWNER ubuntucare' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='{database}')\\gexec\n"
         # Password is stdin, never a process argument or notebook output.
-        self.run(['runuser', '-u', 'postgres', '--', 'psql', '-h', data, '-v', 'ON_ERROR_STOP=1'], 'database-users', input=sql)
+        self.run(['runuser', '-u', 'postgres', '--', postgres_bin / 'psql', '-X',
+                  '-h', data, '-p', '55432', '-U', 'postgres', '-d', 'postgres',
+                  '-v', 'ON_ERROR_STOP=1'], 'database-users', input=sql)
         self.start('redis', ['redis-server', '--bind', '127.0.0.1', '--port', '56379', '--dir', self.root,
                              '--save', '', '--appendonly', 'no'], port=56379)
         self.run([self.python, '-m', 'alembic', '-c', 'scripts/migration/alembic.ini', 'upgrade', 'head'], 'database-migrations')

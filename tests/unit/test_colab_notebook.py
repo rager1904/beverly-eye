@@ -189,6 +189,15 @@ class NotebookTests(unittest.TestCase):
                 self.assertIn(name, started)
             for name in ('ollama', 'agents', 'asr', 'tts', 'rag', 'qdrant', 'neo4j'):
                 self.assertNotIn(name, started)
+            setup_call = next(call for call in runtime.run.call_args_list if call.args[1] == 'database-users')
+            command = setup_call.args[0]
+            postgres_command = next(call.args[1] for call in runtime.start.call_args_list if call.args[0] == 'postgres')
+            self.assertEqual(command[command.index('-p') + 1], postgres_command[postgres_command.index('-p') + 1])
+            self.assertEqual(command[command.index('-h') + 1], runtime.root / 'postgres')
+            self.assertEqual(command[command.index('-U') + 1], 'postgres')
+            self.assertEqual(command[command.index('-d') + 1], 'postgres')
+            self.assertIn('-X', command)
+            self.assertNotIn(runtime.private['db_password'], ' '.join(map(str, command)))
             runtime.verify_login.assert_called_once_with('http://127.0.0.1:3000')
             self.assertEqual(runtime.env['UBUNTUCARE_COLAB_ENABLE_AI'], '0')
             self.assertNotIn('llm-model-download', [call.args[1] for call in runtime.run.call_args_list])

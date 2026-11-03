@@ -1,0 +1,56 @@
+# =============================================================================
+# UbuntuCare - RAG (Retrieval-Augmented Generation)
+# Vector search + LLM context for clinical knowledge base
+# Zero external API dependencies - fully local inference
+# =============================================================================
+ARG BASE_IMAGE_TAG=latest
+FROM ubuntucare-base/python:${BASE_IMAGE_TAG} AS builder
+
+LABEL service="rag"
+
+USER root
+
+# RAG-specific dependencies
+# Install torch from CPU-only index first to avoid pulling 2+ GB of CUDA packages
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+COPY infra/docker/services/requirements.rag.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY src/backend/ /app/src/backend/
+
+USER appuser
+
+FROM ubuntucare-base/python:${BASE_IMAGE_TAG}
+
+LABEL service="rag"
+
+USER root
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /app /app
+RUN mkdir -p /data/models/sentence-transformers && chown -R appuser:appuser /app /data
+
+USER appuser
+WORKDIR /app
+
+ENV PYTHONPATH=/app
+
+EXPOSE 8005
+
+ENV SERVICE_NAME=rag
+ENV RAG__EMBEDDING_MODEL=${RAG_EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+ENV RAG__VECTOR_DIMENSION=384
+ENV RAG__CHUNK_SIZE=512
+ENV RAG__CHUNK_OVERLAP=64
+ENV RAG__TOP_K=10
+ENV RAG__SCORE_THRESHOLD=0.5
+ENV RAG__DEVICE=${RAG_DEVICE:-cpu}
+ENV RAG__PERSIST_DIR=/data/rag/vectorstore
+ENV HF_HOME=/data/huggingface
+ENV SENTENCE_TRANSFORMERS_HOME=/data/models/sentence-transformers
+
+VOLUME ["/data"]
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8005/api/v1/rag/health')" || exit 1
+
+ENTRYPOINT uvicorn src.backend.rag.main:app --host 0.0.0.0 --port 8005 --workers ${UVICORN_WORKERS:-1} --proxy-headers

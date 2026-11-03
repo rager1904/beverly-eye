@@ -1,0 +1,203 @@
+{
+  "schema_version": "1.0",
+  "country": "Zambia",
+  "country_code": "ZM",
+  "provinces": [
+    {
+      "id": 1,
+      "code": "LK",
+      "name": "Lusaka",
+      "capital": "Lusaka",
+      "population": 3782737,
+      "area_sq_km": 21896,
+      "districts": [
+        {"code": "LK001", "name": "Lusaka", "population": 1742979},
+        {"code": "LK002", "name": "Chilanga", "population": 177183},
+        {"code": "LK003", "name": "Kafue", "population": 311117},
+        {"code": "LK004", "name": "Luangwa", "population": 25000},
+        {"code": "LK005", "name": "Chongwe", "population": 251345},
+        {"code": "LK006", "name": "Rufunsa", "population": 66193},
+        {"code": "LK007", "name": "Shibuyunji", "population": 50920}
+      ]
+    },
+    {
+      "id": 2,
+      "code": "CB",
+      "name": "Copperbelt",
+      "capital": "Ndola",
+      "population": 2893241,
+      "area_sq_km": 31328,
+      "districts": [
+        {"code": "CB001", "name": "Ndola", "population": 590000},
+        {"code": "CB002", "name": "Kitwe", "population": 625000},
+        {"code": "CB003", "name": "Chingola", "population": 320000},
+        {"code": "CB004", "name": "Mufulira", "population": 280000},
+        {"code": "CB005", "name": "Luanshya", "population": 210000},
+        {"code": "CB006", "name": "Kalulushi", "population": 120000},
+        {"code": "CB007", "name": "Chililabombwe", "population": 110000},
+        {"code": "CB008", "name": "Mpongwe", "population": 105000},
+        {"code": "CB009", "name": "Lufwanyama", "population": 82000},
+        {"code": "CB010", "name": "Masaiti", "population": 95000}
+      ]
+    },
+    {
+      "id": 3,
+      "code": "CT",
+      "name": "Central",
+      "capital": "Kabwe",
+      "population": 1807575,
+      "area_sq_km": 94394,
+      "districts": [
+        {"code": "CT001", "name": "Kabwe", "population": 250000},
+        {"code": "CT002", "name": "Mkushi", "population": 180000},
+        {"code": "CT003", "name": "Serenje", "population": 145000},
+        {"code": "CT004", "name": "Mumbwa", "population": 260000},
+        {"code": "CT005", "name": "Chibombo", "population": 305000},
+        {"code": "CT006", "name": "Chisamba", "population": 120000},
+        {"code": "CT007", "name": "Kapiri Mposhi", "population": 310000},
+        {"code": "CT008", "name": "Itezhi-Tezhi", "population": 55000},
+        {"code": "CT009", "name": "Ngabwe", "population": 33000}
+      ]
+    },
+    {
+      "id": 4,
+      "code": "ST",
+      "name": "Southern",
+      "capital": "Choma",
+      "population": 2107721,
+      "area_sq_km": 85283,
+      "districts": [
+        {"code": "ST001", "name": "Choma", "population": 300000},
+        {"code": "ST002", "name": "Livingstone", "population": 180000},
+        {"code": "ST003", "name": "Mazabuka", "population": 340000},
+        {"code": "ST004", "name": "Monze", "population": 220000},
+        {"code": "ST005", "name": "Kalomo", "population": 280000},
+        {"code": "ST006", "name": "Namwala", "population": 115000},
+        {"code": "ST007", "name": "Gwembe", "population": 65000},
+        {"code": "ST008", "name": "Sinazongwe", "population": 115000},
+        {"code": "ST009", "name": "Kazungula", "population": 75000},
+        {"code": "ST010", "name": "Pemba", "population": 90000},
+        {"code": "ST011", "name": "Zimba", "population": 70000}
+      ]
+    },
+    {
+      "id": 5,
+      "code": "ET",
+      "name": "Eastern",
+      "capital": "Chipata",
+      "population": 2265153,
+      "area_sq_km": 69106,
+      "districts": [
+        {"code": "ET001", "name": "Chipata", "population": 500000},
+        {"code": "ET002", "name": "Petauke", "population": 340000},
+        {"code": "ET003", "name": "Katete", "population": 280000},
+        {"code": "ET004", "name": "Lundazi", "population": 380000},
+        {"code": "ET005", "name": "Chadiza", "population": 115000},
+        {"code": "ET006", "name": "Nyimba", "population": 105000},
+        {"code": "ET007", "name": "Sinda", "population": 140000},
+        {"code": "ET008", "name": "Vubwi", "population": 65000},
+        {"code": "ET009", "name": "Mambwe", "population": 95000},
+        {"code": "ET010", "name": "Kasenengwa", "population": 75000}
+      ]
+    },
+    {
+      "id": 6,
+      "code": "NR",
+      "name": "Northern",
+      "capital": "Kasama",
+      "population": 1545658,
+      "area_sq_km": 77868,
+      "districts": [
+        {"code": "NR001", "name": "Kasama", "population": 320000},
+        {"code": "NR002", "name": "Mbala", "population": 210000},
+        {"code": "NR003", "name": "Mpulungu", "population": 110000},
+        {"code": "NR004", "name": "Luwingu", "population": 200000},
+        {"code": "NR005", "name": "Mungwi", "population": 165000},
+        {"code": "NR006", "name": "Mporokoso", "population": 100000},
+        {"code": "NR007", "name": "Nsama", "population": 85000},
+        {"code": "NR008", "name": "Senga Hill", "population": 115000}
+      ]
+    },
+    {
+      "id": 7,
+      "code": "WT",
+      "name": "Western",
+      "capital": "Mongu",
+      "population": 1203600,
+      "area_sq_km": 126386,
+      "districts": [
+        {"code": "WT001", "name": "Mongu", "population": 195000},
+        {"code": "WT002", "name": "Senanga", "population": 115000},
+        {"code": "WT003", "name": "Sesheke", "population": 110000},
+        {"code": "WT004", "name": "Kaoma", "population": 170000},
+        {"code": "WT005", "name": "Kalabo", "population": 105000},
+        {"code": "WT006", "name": "Lukulu", "population": 70000},
+        {"code": "WT007", "name": "Shangombo", "population": 60000},
+        {"code": "WT008", "name": "Limulunga", "population": 65000},
+        {"code": "WT009", "name": "Nkeyema", "population": 55000},
+        {"code": "WT010", "name": "Sioma", "population": 45000},
+        {"code": "WT011", "name": "Mitete", "population": 35000}
+      ]
+    },
+    {
+      "id": 8,
+      "code": "LP",
+      "name": "Luapula",
+      "capital": "Mansa",
+      "population": 1280766,
+      "area_sq_km": 50567,
+      "districts": [
+        {"code": "LP001", "name": "Mansa", "population": 260000},
+        {"code": "LP002", "name": "Chembe", "population": 50000},
+        {"code": "LP003", "name": "Mwansabombwe", "population": 80000},
+        {"code": "LP004", "name": "Samfya", "population": 165000},
+        {"code": "LP005", "name": "Kawambwa", "population": 175000},
+        {"code": "LP006", "name": "Nchelenge", "population": 200000},
+        {"code": "LP007", "name": "Milenge", "population": 60000},
+        {"code": "LP008", "name": "Mwense", "population": 115000},
+        {"code": "LP009", "name": "Chifunabuli", "population": 100000},
+        {"code": "LP010", "name": "Lunga", "population": 40000}
+      ]
+    },
+    {
+      "id": 9,
+      "code": "MG",
+      "name": "Muchinga",
+      "capital": "Chinsali",
+      "population": 985651,
+      "area_sq_km": 87606,
+      "districts": [
+        {"code": "MG001", "name": "Chinsali", "population": 140000},
+        {"code": "MG002", "name": "Isoka", "population": 130000},
+        {"code": "MG003", "name": "Nakonde", "population": 200000},
+        {"code": "MG004", "name": "Mpika", "population": 200000},
+        {"code": "MG005", "name": "Chama", "population": 120000},
+        {"code": "MG006", "name": "Shiwang'andu", "population": 70000},
+        {"code": "MG007", "name": "Kanchibiya", "population": 65000},
+        {"code": "MG008", "name": "Lavushimanda", "population": 35000}
+      ]
+    },
+    {
+      "id": 10,
+      "code": "NW",
+      "name": "North-Western",
+      "capital": "Solwezi",
+      "population": 1203283,
+      "area_sq_km": 125826,
+      "districts": [
+        {"code": "NW001", "name": "Solwezi", "population": 310000},
+        {"code": "NW002", "name": "Kasempa", "population": 80000},
+        {"code": "NW003", "name": "Mufumbwe", "population": 70000},
+        {"code": "NW004", "name": "Kabompo", "population": 75000},
+        {"code": "NW005", "name": "Zambezi", "population": 90000},
+        {"code": "NW006", "name": "Mwinilunga", "population": 120000},
+        {"code": "NW007", "name": "Chavuma", "population": 50000},
+        {"code": "NW008", "name": "Ikelenge", "population": 35000},
+        {"code": "NW009", "name": "Manyinga", "population": 45000},
+        {"code": "NW010", "name": "Kalumbila", "population": 110000},
+        {"code": "NW011", "name": "Musondwisho", "population": 28000},
+        {"code": "NW012", "name": "Mushindamo", "population": 50000}
+      ]
+    }
+  ]
+}

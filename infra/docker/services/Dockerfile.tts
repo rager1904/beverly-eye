@@ -1,0 +1,52 @@
+# =============================================================================
+# UbuntuCare - TTS (Text-to-Speech)
+# Coqui TTS with multi-language support for Zambia
+# Languages: English, Nyanja, Bemba, Tonga
+# =============================================================================
+ARG BASE_IMAGE_TAG=latest
+FROM ubuntucare-base/python:${BASE_IMAGE_TAG} AS builder
+
+LABEL service="tts"
+
+USER root
+
+# TTS-specific dependencies
+COPY infra/docker/services/requirements.tts.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY src/backend/ml/speech/ /app/ml/speech/
+COPY src/backend/shared/ /app/shared/
+COPY src/backend/core/ /app/core/
+
+USER appuser
+
+FROM ubuntucare-base/python:${BASE_IMAGE_TAG}
+
+LABEL service="tts"
+
+USER root
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /app /app
+RUN chown -R appuser:appuser /app
+
+# espeak-ng for phonemisation
+RUN apt-get update && apt-get install -y --no-install-recommends espeak-ng && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+USER appuser
+WORKDIR /app
+
+EXPOSE 8004
+
+ENV SERVICE_NAME=tts
+ENV TTS__DEVICE=${TTS_DEVICE:-cpu}
+ENV TTS__SPEAKER_ID=${TTS_SPEAKER_ID:-0}
+ENV HF_HOME=/app/.cache/huggingface
+ENV PYTHONPATH=/app
+
+VOLUME ["/data"]
+
+HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')" || exit 1
+
+ENTRYPOINT ["uvicorn", "ml.speech.tts.service:app", "--host", "0.0.0.0", "--port", "8004", "--workers", "1", "--proxy-headers"]

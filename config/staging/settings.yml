@@ -1,0 +1,254 @@
+# =============================================================================
+# Staging Configuration — UbuntuCare (Zambia)
+# =============================================================================
+
+version: "1.0"
+environment: staging
+
+# ---------------------------------------------------------------------------
+# 1. Database
+# ---------------------------------------------------------------------------
+database:
+  primary:
+    engine: postgresql
+    host: "${STAGING_DB_HOST:-localhost}"
+    port: 5432
+    database: ubuntucare_staging
+    username: "${STAGING_DB_USER:-staging_user}"
+    password: "${STAGING_DB_PASSWORD:-staging_password}"
+    ssl_mode: prefer
+    connection_pool:
+      min_size: 5
+      max_size: 20
+      max_overflow: 10
+      pool_timeout_seconds: 15
+      pool_recycle_seconds: 3600
+    statement_timeout_ms: 15000
+  replica:
+    enabled: false
+  vector:
+    engine: pgvector
+    host: "${STAGING_DB_HOST:-localhost}"
+    port: 5432
+    database: ubuntucare_staging
+    username: "${STAGING_DB_USER:-staging_user}"
+    password: "${STAGING_DB_PASSWORD:-staging_password}"
+    connection_pool:
+      min_size: 3
+      max_size: 10
+  redis:
+    mode: standalone
+    host: "${STAGING_REDIS_HOST:-localhost}"
+    port: 6379
+    password: "${STAGING_REDIS_PASSWORD:-staging_redis_pass}"
+    ssl: false
+    db: 0
+    max_connections: 20
+
+# ---------------------------------------------------------------------------
+# 2. Reduced Model Sizes
+# ---------------------------------------------------------------------------
+ai:
+  provider: "vllm"
+  models:
+    asr:
+      model: "whisper-small"
+      quantization: INT8
+      batch_size: 4
+    tts:
+      model: "piper"
+      quantization: FP16
+      batch_size: 2
+    llm:
+      model: "Qwen3-8B"
+      quantization: "INT4_AWQ"
+      max_context_length: 8192
+      batch_size: 1
+      replicas: 1
+    llm_fallback:
+      model: "Qwen3-8B"
+      quantization: "FP16"
+      enabled: false
+    embedding:
+      model: "stella-400m"
+      quantization: FP16
+      batch_size: 16
+    vision:
+      model: "vit-lung-xray"
+      quantization: INT8
+      batch_size: 2
+      enabled: false
+  model_serving:
+    inference_server: vllm
+    vllm_config:
+      max_num_batched_tokens: 4096
+      max_num_seqs: 64
+      gpu_memory_utilization: 0.85
+      max_model_len: 16384
+      enforce_eager: false
+      enable_prefix_caching: true
+    gpu_count: 1
+    fallback_to_cpu: true
+
+# ---------------------------------------------------------------------------
+# 3. Feature Flags
+# ---------------------------------------------------------------------------
+feature_flags:
+  offline_mode: true
+  voice_assistant: true
+  multilingual_tts: true
+  ai_diagnosis_assist: true
+  drug_interaction_check: true
+  lab_result_interpretation: true
+  imaging_ai: false
+  smart_scheduling: true
+  inventory_forecast: true
+  telemedicine: true
+  dhis2_integration: true
+  smartcard_integration: false
+  mhealth_sms: true
+  analytics_dashboard: true
+  sync_engine: true
+  patient_portal: true
+  audit_trail: true
+  experimental_rbac_v2: true
+  experimental_vector_search: true
+  experimental_offline_first: true
+  experimental_batch_sync: false
+  experimental_realtime_sync: true
+  experimental_fhir_r4: true
+  experimental_hl7_v2: false
+
+# ---------------------------------------------------------------------------
+# 4. Logging
+# ---------------------------------------------------------------------------
+logging:
+  level: INFO
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  handlers:
+    console:
+      enabled: true
+      level: INFO
+      colorize: true
+    file:
+      enabled: true
+      level: DEBUG
+      path: "${STAGING_DATA_DIR:-/data/staging}/logs/app.log"
+      max_bytes: 10485760
+      backup_count: 3
+  third_party_logging:
+    uvicorn: INFO
+    sqlalchemy: WARNING
+    httpx: WARNING
+
+# ---------------------------------------------------------------------------
+# 5. Server
+# ---------------------------------------------------------------------------
+server:
+  host: "0.0.0.0"
+  port: 8000
+  reload: true
+  workers: 2
+  timeout_keep_alive: 30
+  max_request_size_mb: 50
+  trust_proxy_headers: true
+  forwarded_allow_ips: "*"
+
+# ---------------------------------------------------------------------------
+# 6. CORS
+# ---------------------------------------------------------------------------
+cors:
+  allow_origins:
+    - "http://localhost:3000"
+    - "http://localhost:5173"
+    - "https://staging.ubuntucare.gov.zm"
+    - "https://*.staging.ubuntucare.gov.zm"
+  allow_methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "PATCH"
+  allow_headers:
+    - "Authorization"
+    - "Content-Type"
+    - "X-Device-Key"
+    - "X-Idempotency-Key"
+  allow_credentials: true
+  expose_headers:
+    - "X-Request-Id"
+  max_age_seconds: 3600
+
+# ---------------------------------------------------------------------------
+# 7. External Services
+# ---------------------------------------------------------------------------
+external_services:
+  sms:
+    provider: africastalking
+    api_key: "${STAGING_AFRICASTALKING_API_KEY:-staging_key}"
+    username: "${STAGING_AFRICASTALKING_USERNAME:-sandbox}"
+    sandbox: true
+  email:
+    provider: smtp
+    smtp_host: "${STAGING_SMTP_HOST:-localhost}"
+    smtp_port: 1025
+    smtp_username: ""
+    smtp_password: ""
+    smtp_tls: false
+  s3:
+    provider: minio
+    endpoint_url: "http://${STAGING_MINIO_HOST:-localhost}:9000"
+    bucket: "staging-ubuntucare"
+    access_key: "${STAGING_MINIO_ACCESS_KEY:-minioadmin}"
+    secret_key: "${STAGING_MINIO_SECRET_KEY:-minioadmin}"
+    region: "us-east-1"
+    secure: false
+  dhis2:
+    enabled: true
+    base_url: "${STAGING_DHIS2_URL:-https://staging.dhis2.moh.gov.zm}"
+    username: "${STAGING_DHIS2_USER:-staging_integration}"
+    password: "${STAGING_DHIS2_PASSWORD:-staging_pass}"
+  keycloak:
+    enabled: true
+    server_url: "${STAGING_KEYCLOAK_URL:-http://localhost:8080}"
+    realm: "ubuntucare-staging"
+    client_id: "staging-api"
+    client_secret: "${STAGING_KEYCLOAK_SECRET:-staging_secret}"
+
+# ---------------------------------------------------------------------------
+# 8. Sync
+# ---------------------------------------------------------------------------
+sync:
+  enabled: true
+  mode: "hybrid"
+  simulate_offline: true
+  simulate_latency_ms: 100
+  simulate_bandwidth_bps: 1048576
+  simulate_intermittent: true
+  queue_path: "${STAGING_DATA_DIR:-/data/staging}/sync_queue.db"
+  conflict_resolution: "last_write_wins"
+  sync_on_startup: true
+
+# ---------------------------------------------------------------------------
+# 9. Monitoring
+# ---------------------------------------------------------------------------
+monitoring:
+  enabled: true
+  metrics_port: 9090
+  health_check_interval_seconds: 30
+  sentry_dsn: "${STAGING_SENTRY_DSN:-}"
+  profiling_enabled: true
+
+# ---------------------------------------------------------------------------
+# 10. Rate Limiting (Stricter than Dev, Lighter than Prod)
+# ---------------------------------------------------------------------------
+rate_limiting:
+  enabled: true
+  default_limit:
+    requests: 200
+    window_seconds: 60
+  per_endpoint:
+    "/api/v1/auth/login":requests: 20
+      window_seconds: 60
+    "/api/v1/inference/llm":requests: 20
+      window_seconds: 60

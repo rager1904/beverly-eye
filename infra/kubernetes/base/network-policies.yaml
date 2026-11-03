@@ -1,0 +1,379 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: healthcare
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name:kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-gateway
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: api-gateway
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name:ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 9090
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: emr-service
+        - podSelector:
+            matchLabels:
+              app: agent-orchestrator
+        - podSelector:
+            matchLabels:
+              app: asr-service
+        - podSelector:
+            matchLabels:
+              app: tts-service
+        - podSelector:
+            matchLabels:
+              app: rag-service
+        - podSelector:
+            matchLabels:
+              app: disease-surveillance
+        - podSelector:
+            matchLabels:
+              app: community-health
+        - podSelector:
+            matchLabels:
+              app: medical-imaging
+        - podSelector:
+            matchLabels:
+              app: drug-supply-chain
+        - podSelector:
+            matchLabels:
+              app: notifications
+        - podSelector:
+            matchLabels:
+              app: redis
+        - podSelector:
+            matchLabels:
+              app: minio
+      ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 9000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-frontend
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: frontend
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name:ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-postgres
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: emr-service
+        - podSelector:
+            matchLabels:
+              app: agent-orchestrator
+        - podSelector:
+            matchLabels:
+              app: rag-service
+        - podSelector:
+            matchLabels:
+              app: disease-surveillance
+        - podSelector:
+            matchLabels:
+              app: community-health
+        - podSelector:
+            matchLabels:
+              app: drug-supply-chain
+        - podSelector:
+            matchLabels:
+              app: celery-worker
+        - podSelector:
+            matchLabels:
+              app: notifications
+      ports:
+        - protocol: TCP
+          port: 5432
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-redis
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: agent-orchestrator
+        - podSelector:
+            matchLabels:
+              app: celery-worker
+        - podSelector:
+            matchLabels:
+              app: celery-beat
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+        - podSelector:
+            matchLabels:
+              app: emr-service
+        - podSelector:
+            matchLabels:
+              app: notifications
+      ports:
+        - protocol: TCP
+          port: 6379
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-qdrant
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: qdrant
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: rag-service
+        - podSelector:
+            matchLabels:
+              app: agent-orchestrator
+      ports:
+        - protocol: TCP
+          port: 6333
+        - protocol: TCP
+          port: 6334
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-weaviate
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: weaviate
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: rag-service
+        - podSelector:
+            matchLabels:
+              app: agent-orchestrator
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 50051
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-minio
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: minio
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: medical-imaging
+        - podSelector:
+            matchLabels:
+              app: asr-service
+        - podSelector:
+            matchLabels:
+              app: tts-service
+        - podSelector:
+            matchLabels:
+              app: emr-service
+        - podSelector:
+            matchLabels:
+              app: drug-supply-chain
+        - podSelector:
+            matchLabels:
+              app: rag-service
+      ports:
+        - protocol: TCP
+          port: 9000
+        - protocol: TCP
+          port: 9001
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-monitoring
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: prometheus
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name:monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-metrics
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: prometheus
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 9090
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-agent-orchestrator
+  namespace: healthcare
+spec:
+  podSelector:
+    matchLabels:
+      app: agent-orchestrator
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: emr-service
+        - podSelector:
+            matchLabels:
+              app: asr-service
+        - podSelector:
+            matchLabels:
+              app: tts-service
+        - podSelector:
+            matchLabels:
+              app: rag-service
+        - podSelector:
+            matchLabels:
+              app: disease-surveillance
+        - podSelector:
+            matchLabels:
+              app: community-health
+        - podSelector:
+            matchLabels:
+              app: medical-imaging
+        - podSelector:
+            matchLabels:
+              app: drug-supply-chain
+        - podSelector:
+            matchLabels:
+              app: notifications
+        - podSelector:
+            matchLabels:
+              app: postgres
+        - podSelector:
+            matchLabels:
+              app: redis
+        - podSelector:
+            matchLabels:
+              app: qdrant
+        - podSelector:
+            matchLabels:
+              app: weaviate
+      ports:
+        - protocol: TCP
+          port: 8000
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 6333
+        - protocol: TCP
+          port: 6334
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 50051

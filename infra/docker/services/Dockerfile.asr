@@ -1,0 +1,49 @@
+# =============================================================================
+# UbuntuCare - ASR (Automatic Speech Recognition)
+# Whisper-based, optimised for African English & local languages
+# Supports: English, Nyanja, Bemba, Tonga, Lozi, Luvale, Lunda, Kaonde
+# =============================================================================
+ARG BASE_IMAGE_TAG=latest
+FROM ubuntucare-base/python:${BASE_IMAGE_TAG} AS builder
+
+LABEL service="asr"
+
+USER root
+
+# ASR-specific dependencies
+COPY infra/docker/services/requirements.asr.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY src/backend/ml/speech/ /app/ml/speech/
+COPY src/backend/shared/ /app/shared/
+COPY src/backend/core/ /app/core/
+
+USER appuser
+
+FROM ubuntucare-base/python:${BASE_IMAGE_TAG}
+
+LABEL service="asr"
+
+USER root
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /app /app
+RUN chown -R appuser:appuser /app
+
+USER appuser
+WORKDIR /app
+
+EXPOSE 8003
+
+ENV SERVICE_NAME=asr
+ENV WHISPER_MODEL_SIZE=${WHISPER_MODEL_SIZE:-small}
+ENV WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
+ENV WHISPER_COMPUTE_TYPE=${WHISPER_COMPUTE_TYPE:-int8}
+ENV HF_HOME=/app/.cache/huggingface
+ENV PYTHONPATH=/app
+
+VOLUME ["/data"]
+
+HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')" || exit 1
+
+ENTRYPOINT ["uvicorn", "ml.speech.asr.service:app", "--host", "0.0.0.0", "--port", "8003", "--workers", "1", "--proxy-headers"]

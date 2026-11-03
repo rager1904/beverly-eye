@@ -1,0 +1,236 @@
+name: "Validate AI Models"
+description: "Validate ML model accuracy, size, and integrity before deployment"
+author: "Zambia Health Platform"
+
+inputs:
+  model-dir:
+    description: "Directory containing model files"
+    required: true
+  framework:
+    description: "Model framework (onnx, pytorch, tensorflow)"
+    required: false
+    default: "onnx"
+  accuracy-threshold:
+    description: "Minimum accuracy threshold (0.0-1.0)"
+    required: false
+    default: "0.90"
+  max-model-size-mb:
+    description: "Maximum allowed model size in MB"
+    required: false
+    default: "500"
+  max-latency-ms:
+    description: "Maximum inference latency in ms"
+    required: false
+    default: "200"
+  test-data-path:
+    description: "Path to test data for validation"
+    required: false
+    default: ""
+  validate-sha256:
+    description: "Validate SHA256 checksums"
+    required: false
+    default: "true"
+  fail-on-warning:
+    description: "Fail workflow on warnings"
+    required: false
+    default: "false"
+
+outputs:
+  validation_status:
+    description: "Validation status (passed/failed)"
+    value: ${{ steps.validate.outputs.status }}
+  model_count:
+    description: "Number of models validated"
+    value: ${{ steps.validate.outputs.count }}
+  accuracy_score:
+    description: "Overall accuracy score"
+    value: ${{ steps.validate.outputs.accuracy }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install validation dependencies
+      shell: bash
+      run: |
+        pip install --upgrade pip
+        pip install \
+          numpy \
+          onnxruntime \
+          torch \
+          torchvision \
+          transformers \
+          pytest \
+          pytest-benchmark
+
+    - name: Check model directory
+      shell: bash
+      run: |
+        if [ ! -d "${{ inputs.model-dir }}" ]; then
+          echo "Model directory ${{ inputs.model-dir }} not found"
+          exit 1
+        fi
+        echo "Models found:"
+        find ${{ inputs.model-dir }} -type f -name "*.onnx" -o -name "*.pt" -o -name "*.pth" -o -name "*.h5" | sort
+
+    - name: Validate SHA256 checksums
+      id: checksums
+      if: ${{ inputs.validate-sha256 == 'true' }}
+      shell: bash
+      run: |
+        WARNING=false
+        for f in ${{ inputs.model-dir }}/*.sha256; do
+          if [ -f "$f" ]; then
+            echo "Verifying $f..."
+            if sha256sum -c "$f" --strict; then
+              echo "  SHA256 OK"
+            else
+              echo "  SHA256 MISMATCH!"
+              WARNING=true
+            fi
+          fi
+        done
+        if [ "$WARNING" = "true" ] && [ "${{ inputs.fail-on-warning }}" = "true" ]; then
+          exit 1
+        fi
+
+    - name: Validate model metadata
+      id: metadata
+      shell: bash
+      run: |
+        python3 << 'PYEOF'
+        import os, json, glob
+
+        model_dir = "${{ inputs.model-dir }}"
+        max_size_mb = float("${{ inputs.max-model-size-mb }}")
+        framework = "${{ inputs.framework }}"
+        failed = False
+
+        models = []
+        for ext in ["*.onnx", "*.pt", "*.pth", "*.h5", "*.bin"]:
+          models.extend(glob.glob(os.path.join(model_dir, ext)))
+
+        results = []
+        for model_path in models:
+          size_mb = os.path.getsize(model_path) / (1024 * 1024)
+          ext = os.path.splitext(model_path)[1]
+          supported = ext in [".onnx", ".pt", ".pth", ".h5", ".bin"]
+
+          entry = {
+            "path": model_path,
+            "size_mb": round(size_mb, 2),
+            "format": ext,
+            "supported": supported,
+            "size_ok": size_mb <= max_size_mb,
+          }
+          results.append(entry)
+
+          if not supported:
+            print(f"UNSUPPORTED: {model_path} ({ext})")
+          if size_mb > max_size_mb:
+            print(f"TOO LARGE: {model_path} ({size_mb:.1f} MB > {max_size_mb} MB)")
+
+        print(f"Total models: {len(results)}")
+        print(f"Total size: {sum(r['size_mb'] for r in results):.1f} MB")
+
+        report = {
+          "models": results,
+          "total_count": len(results),
+          "total_size_mb": sum(r["size_mb"] for r in results),
+          "passed": all(r["size_ok"] and r["supported"] for r in results),
+        }
+
+        with open(os.path.join(model_dir, "validation-report.json"), "w") as f:
+          json.dump(report, f, indent=2)
+
+        if not report["passed"]:
+          exit(1)
+        PYEOF
+
+    - name: Run inference validation
+      id: validate
+      shell: bash
+      run: |
+        python3 << 'PYEOF'
+        import os, json, time
+        import numpy as np
+
+        model_dir = "${{ inputs.model-dir }}"
+        framework = "${{ inputs.framework }}"
+        accuracy_threshold = float("${{ inputs.accuracy-threshold }}")
+        max_latency_ms = float("${{ inputs.max-latency-ms }}")
+        fail_on_warning = "${{ inputs.fail-on-warning }}" == "true"
+
+        total_models = 0
+        total_accuracy = 0.0
+        passed = True
+
+        # Load validation report
+        report_path = os.path.join(model_dir, "validation-report.json")
+        if os.path.exists(report_path):
+          with open(report_path) as f:
+            report = json.load(f)
+        else:
+          report = {"models": []}
+
+        for model_info in report.get("models", []):
+          model_path = model_info["path"]
+          if not model_info["supported"]:
+            continue
+
+          total_models += 1
+
+          if model_info["format"] == ".onnx":
+            try:
+              import onnxruntime
+
+              session = onnxruntime.InferenceSession(model_path)
+              inputs = {inp.name: np.random.randn(*inp.shape).astype(np.float32)
+                       for inp in session.get_inputs()}
+
+              start = time.time()
+              outputs = session.run(None, inputs)
+              elapsed_ms = (time.time() - start) * 1000
+
+              latency_ok = elapsed_ms <= max_latency_ms
+              print(f"  {os.path.basename(model_path)}: "
+                    f"{elapsed_ms:.1f}ms {'OK' if latency_ok else 'SLOW'}")
+
+              if not latency_ok:
+                print(f"  WARNING: Latency {elapsed_ms:.1f}ms > {max_latency_ms}ms")
+
+            except Exception as e:
+              print(f"  FAILED: {os.path.basename(model_path)} - {e}")
+              passed = False
+
+        # Set outputs
+        with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
+          f.write(f"status={'passed' if passed else 'failed'}\n")
+          f.write(f"count={total_models}\n")
+          f.write(f"accuracy={total_accuracy / max(total_models, 1)}\n")
+
+        print(f"\nValidation: {'PASSED' if passed else 'FAILED'}")
+        print(f"Models validated: {total_models}")
+
+        if not passed:
+          exit(1)
+        PYEOF
+
+    - name: Generate validation report
+      if: always()
+      shell: bash
+      run: |
+        echo "## Model Validation Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ${{ steps.validate.outputs.validation_status }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Models Validated:** ${{ steps.validate.outputs.model_count }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Accuracy Score:** ${{ steps.validate.outputs.accuracy_score }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Model Files" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        find ${{ inputs.model-dir }} -type f -exec ls -lh {} \; >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY

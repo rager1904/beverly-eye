@@ -1,0 +1,403 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: api-gateway
+  namespace: healthcare
+  labels:
+    app: api-gateway
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: emr-service
+  namespace: healthcare
+  labels:
+    app: emr-service
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agent-orchestrator
+  namespace: healthcare
+  labels:
+    app: agent-orchestrator
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: asr-service
+  namespace: healthcare
+  labels:
+    app: asr-service
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tts-service
+  namespace: healthcare
+  labels:
+    app: tts-service
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rag-service
+  namespace: healthcare
+  labels:
+    app: rag-service
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: frontend
+  namespace: healthcare
+  labels:
+    app: frontend
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: celery-worker
+  namespace: healthcare
+  labels:
+    app: celery-worker
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: celery-beat
+  namespace: healthcare
+  labels:
+    app: celery-beat
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: disease-surveillance
+  namespace: healthcare
+  labels:
+    app: disease-surveillance
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: community-health
+  namespace: healthcare
+  labels:
+    app: community-health
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: medical-imaging
+  namespace: healthcare
+  labels:
+    app: medical-imaging
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: drug-supply-chain
+  namespace: healthcare
+  labels:
+    app: drug-supply-chain
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: notifications
+  namespace: healthcare
+  labels:
+    app: notifications
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgres
+  namespace: healthcare
+  labels:
+    app: postgres
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: redis
+  namespace: healthcare
+  labels:
+    app: redis
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: qdrant
+  namespace: healthcare
+  labels:
+    app: qdrant
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: weaviate
+  namespace: healthcare
+  labels:
+    app: weaviate
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: minio
+  namespace: healthcare
+  labels:
+    app: minio
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-reader
+  namespace: healthcare
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pod-executor
+  namespace: healthcare
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: metrics-reader
+  namespace: healthcare
+rules:
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/metrics"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: service-discovery
+  namespace: healthcare
+rules:
+  - apiGroups: [""]
+    resources: ["services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: config-reader
+  namespace: healthcare
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: api-gateway-pod-reader
+  namespace: healthcare
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pod-reader
+subjects:
+  - kind: ServiceAccount
+    name: api-gateway
+    namespace: healthcare
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agent-orchestrator-pod-executor
+  namespace: healthcare
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: pod-executor
+subjects:
+  - kind: ServiceAccount
+    name: agent-orchestrator
+    namespace: healthcare
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agent-orchestrator-service-discovery
+  namespace: healthcare
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: service-discovery
+subjects:
+  - kind: ServiceAccount
+    name: agent-orchestrator
+    namespace: healthcare
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: all-services-config-reader
+  namespace: healthcare
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: config-reader
+subjects:
+  - kind: ServiceAccount
+    name: api-gateway
+  - kind: ServiceAccount
+    name: emr-service
+  - kind: ServiceAccount
+    name: agent-orchestrator
+  - kind: ServiceAccount
+    name: asr-service
+  - kind: ServiceAccount
+    name: tts-service
+  - kind: ServiceAccount
+    name: rag-service
+  - kind: ServiceAccount
+    name: frontend
+  - kind: ServiceAccount
+    name: celery-worker
+  - kind: ServiceAccount
+    name: celery-beat
+  - kind: ServiceAccount
+    name: disease-surveillance
+  - kind: ServiceAccount
+    name: community-health
+  - kind: ServiceAccount
+    name: medical-imaging
+  - kind: ServiceAccount
+    name: drug-supply-chain
+  - kind: ServiceAccount
+    name: notifications
+---
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: healthcare-restricted
+  namespace: healthcare
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames:"runtime/default"
+    seccomp.security.alpha.kubernetes.io/defaultProfileName:"runtime/default"
+    apparmor.security.beta.kubernetes.io/allowedProfileNames:"runtime/default"
+    apparmor.security.beta.kubernetes.io/defaultProfileName:"runtime/default"
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - "configMap"
+    - "emptyDir"
+    - "projected"
+    - "secret"
+    - "downwardAPI"
+    - "persistentVolumeClaim"
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: "MustRunAsNonRoot"
+  seLinux:
+    rule: "RunAsAny"
+  supplementalGroups:
+    rule: "MustRunAs"
+    ranges:
+      - min: 1
+        max: 65535
+  fsGroup:
+    rule: "MustRunAs"
+    ranges:
+      - min: 1
+        max: 65535
+  readOnlyRootFilesystem: true
+---
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: healthcare-gpu
+  namespace: healthcare
+  annotations:
+    seccomp.security.alpha.kubernetes.io/allowedProfileNames:"runtime/default"
+    seccomp.security.alpha.kubernetes.io/defaultProfileName:"runtime/default"
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - "configMap"
+    - "emptyDir"
+    - "projected"
+    - "secret"
+    - "downwardAPI"
+    - "persistentVolumeClaim"
+    - "hostPath"
+  allowedHostPaths:
+    - pathPrefix: "/var/lib/nvidia"
+      readOnly: true
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: "MustRunAsNonRoot"
+  seLinux:
+    rule: "RunAsAny"
+  supplementalGroups:
+    rule: "MustRunAs"
+    ranges:
+      - min: 1
+        max: 65535
+  fsGroup:
+    rule: "MustRunAs"
+    ranges:
+      - min: 1
+        max: 65535
+  readOnlyRootFilesystem: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: psp-restricted
+  namespace: healthcare
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: psp: restricted
+subjects:
+  - kind: Group
+    apiGroup: rbac.authorization.k8s.io
+    name: system: serviceaccounts: healthcare
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: healthcare
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

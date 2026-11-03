@@ -1,0 +1,253 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: medical-imaging
+  namespace: healthcare
+  labels:
+    app: medical-imaging
+    service-type: gpu-inference
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app: medical-imaging
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medical-imaging
+  namespace: healthcare
+  labels:
+    app: medical-imaging
+    service-type: gpu-inference
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: medical-imaging
+  template:
+    metadata:
+      labels:
+        app: medical-imaging
+        service-type: gpu-inference
+      annotations:
+        prometheus.io/scrape:"true"
+        prometheus.io/port:"9090"
+        prometheus.io/path:"/metrics"
+        nvidia.com/gpu:"1"
+    spec:
+      serviceAccountName: medical-imaging
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1012
+        fsGroup: 1012
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: medical-imaging
+          image: ubuntucare/medical-imaging:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: MODEL_DEVICE
+              value: "cuda"
+            - name: IMAGING_MAX_FILE_SIZE_MB
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: IMAGING_MAX_FILE_SIZE_MB
+            - name: IMAGING_SUPPORTED_FORMATS
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: IMAGING_SUPPORTED_FORMATS
+            - name: IMAGING_DEFAULT_MODALITY
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: IMAGING_DEFAULT_MODALITY
+            - name: IMAGING_BATCH_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: IMAGING_BATCH_SIZE
+            - name: IMAGING_CONFIDENCE_THRESHOLD
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: IMAGING_CONFIDENCE_THRESHOLD
+            - name: MINIO_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: MINIO_HOST
+            - name: MINIO_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: MINIO_PORT
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: MINIO_ROOT_PASSWORD
+            - name: MINIO_BUCKET_MEDICAL_IMAGES
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: MINIO_BUCKET_MEDICAL_IMAGES
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: LOG_LEVEL
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+              nvidia.com/gpu:"1"
+            limits:
+              cpu: "8"
+              memory: "32Gi"
+              nvidia.com/gpu:"1"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /startup
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              subPath: imaging-models
+            - name: tmp
+              mountPath: /tmp
+            - name: dshm
+              mountPath: /dev/shm
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: model-storage
+        - name: tmp
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "16Gi"
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+        - key: gpu-type
+          operator: Equal
+          value: memory-optimized
+          effect: NoSchedule
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nvidia.com/gpu.present
+                    operator: Exists
+                  - key: gpu-type
+                    operator: In
+                    values:
+                      - memory-optimized
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - medical-imaging
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: medical-imaging-hpa
+  namespace: healthcare
+  labels:
+    app: medical-imaging
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: medical-imaging
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 300
+    scaleDown:
+      stabilizationWindowSeconds: 900
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 600

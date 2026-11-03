@@ -1,0 +1,189 @@
+{
+  "schema_version": "1.0",
+  "country": "Zambia",
+  "program": "Zambia Expanded Programme on Immunization (EPI)",
+  "source": "Zambia Ministry of Health EPI Guidelines 2024",
+  "schedule": [
+    {
+      "vaccine": "BCG (Tuberculosis)",
+      "code": "BCG",
+      "doses": 1,
+      "age": "At birth",
+      "route": "Intradermal (ID)",
+      "site": "Left upper arm (deltoid)",
+      "dose_volume": "0.05ml (<1yr), 0.1ml (>1yr)",
+      "storage_temp": "2-8°C",
+      "contraindications": "Symptomatic HIV/AIDS, severe malnutrition",
+      "supplier": "UNICEF/Serum Institute of India"
+    },
+    {
+      "vaccine": "Oral Polio Vaccine (OPV)",
+      "code": "OPV",
+      "doses": 4,
+      "age": "Birth (OPV0), 6 weeks (OPV1), 10 weeks (OPV2), 14 weeks (OPV3)",
+      "route": "Oral",
+      "site": "Mouth",
+      "dose_volume": "2 drops",
+      "storage_temp": "-15 to -25°C (frozen) or 2-8°C (liquid)",
+      "contraindications": "Severe allergic reaction to previous dose",
+      "supplier": "UNICEF"
+    },
+    {
+      "vaccine": "Inactivated Polio Vaccine (IPV)",
+      "code": "IPV",
+      "doses": 1,
+      "age": "14 weeks",
+      "route": "Intramuscular (IM)",
+      "site": "Right upper thigh (anterolateral)",
+      "dose_volume": "0.5ml",
+      "storage_temp": "2-8°C",
+      "contraindications": "Severe allergic reaction to previous dose or neomycin/streptomycin/polymyxin B",
+      "supplier": "UNICEF"
+    },
+    {
+      "vaccine": "Pentavalent (DTP-HepB-Hib)",
+      "code": "PENTA",
+      "doses": 3,
+      "age": "6 weeks, 10 weeks, 14 weeks",
+      "route": "Intramuscular (IM)",
+      "site": "Left upper thigh (anterolateral)",
+      "dose_volume": "0.5ml",
+      "storage_temp": "2-8°C (DO NOT FREEZE)",
+      "contraindications": "Encephalopathy within 7 days of previous dose, progressive neurological disorder",
+      "supplier": "UNICEF"
+    },
+    {
+      "vaccine": "Pneumococcal Conjugate Vaccine (PCV)",
+      "code": "PCV",
+      "doses": 3,
+      "age": "6 weeks, 10 weeks, 14 weeks",
+      "route": "Intramuscular (IM)",
+      "site": "Right upper thigh (anterolateral) - alternate with Pentavalent",
+      "dose_volume": "0.5ml",
+      "storage_temp": "2-8°C (DO NOT FREEZE)",
+      "contraindications": "Severe allergic reaction to previous dose",
+      "supplier": "GAVI/UNICEF"
+    },
+    {
+      "vaccine": "Rotavirus Vaccine",
+      "code": "ROTA",
+      "doses": 2,
+      "age": "6 weeks, 10 weeks",
+      "route": "Oral",
+      "site": "Mouth",
+      "dose_volume": "1.5ml",
+      "storage_temp": "2-8°C",
+      "contraindications": "Severe combined immunodeficiency (SCID), history of intussusception, severe allergic reaction to previous dose",
+      "supplier": "GAVI/UNICEF",
+      "notes": "First dose must be given before 12 weeks of age"
+    },
+    {
+      "vaccine": "Measles Rubella (MR)",
+      "code": "MR",
+      "doses": 2,
+      "age": "9 months, 18 months",
+      "route": "Subcutaneous (SC)",
+      "site": "Left upper arm (deltoid)",
+      "dose_volume": "0.5ml",
+      "storage_temp": "2-8°C (reconstituted vaccine: 6 hours at 2-8°C, discard after 6 hours)",
+      "contraindications": "Pregnancy, severe immunodeficiency, severe allergic reaction to previous dose or neomycin",
+      "supplier": "UNICEF"
+    },
+    {
+      "vaccine": "Yellow Fever Vaccine",
+      "code": "YF",
+      "doses": 1,
+      "age": "9 months (routine), also for travellers",
+      "route": "Subcutaneous (SC)",
+      "site": "Left upper arm (deltoid)",
+      "dose_volume": "0.5ml",
+      "storage_temp": "2-8°C",
+      "contraindications": "Pregnancy, severe egg allergy, severe immunodeficiency, infants <6 months",
+      "supplier": "UNICEF",
+      "notes": "Valid for international travel certificate (ICVP) - lifelong immunity"
+    },
+    {
+      "vaccine": "HPV Vaccine (Cervical Cancer)",
+      "code": "HPV",
+      "doses": 2,
+      "age": "9-14 years (6-month interval)",
+      "route": "Intramuscular (IM)",
+      "site": "Upper arm (deltoid)",
+      "dose_volume": "0.5ml",
+      "storage_temp": "2-8°C (DO NOT FREEZE)",
+      "contraindications": "Pregnancy, severe allergic reaction to previous dose",
+      "supplier": "GAVI/UNICEF",
+      "notes": "Target: girls 9-14 years. School-based campaign. 2 doses 6 months apart."
+    },
+    {
+      "vaccine": "Tetanus Toxoid (TT/Td)",
+      "code": "TET",
+      "doses": 5,
+      "age": "Pregnant women: TT1 at first contact, TT2 after 4 weeks, TT3 in subsequent pregnancy, TT4, TT5",
+      "route": "Intramuscular (IM)",
+      "site": "Left upper arm (deltoid)",
+      "dose_volume": "0.5ml",
+      "storage_temp": "2-8°C (DO NOT FREEZE)",
+      "contraindications": "Severe allergic reaction to previous dose",
+      "supplier": "UNICEF",
+      "notes": "TT1+TT2 = protects mother; TT3+TT4+TT5 = protects both mother and newborn. Women of childbearing age also eligible."
+    },
+    {
+      "vaccine": "Cholera Vaccine (OCV - Euvichol/Shanchol)",
+      "code": "CHOL",
+      "doses": 2,
+      "age": "6 months+",
+      "route": "Oral",
+      "site": "Mouth",
+      "dose_volume": "1.5ml",
+      "storage_temp": "2-8°C",
+      "contraindications": "Pregnancy (relative)",
+      "supplier": "UNICEF/International Vaccine Institute",
+      "notes": "Used in outbreak response and pre-emptive campaigns in high-risk areas. 2 doses 2 weeks apart. Protection: 2 years."
+    },
+    {
+      "vaccine": "Meningococcal Vaccine (MenA conjugate - MenAfriVac)",
+      "code": "MEN",
+      "doses": 1,
+      "age": "12 months+ (campaigns: 1-29 years)",
+      "route": "Intramuscular (IM)",
+      "site": "Upper arm (deltoid)",
+      "dose_volume": "0.5ml",
+      "storage_temp": "2-8°C",
+      "contraindications": "Severe allergic reaction to previous dose",
+      "supplier": "WHO/UNICEF",
+      "notes": "Used in reactive campaigns in Africa meningitis belt. Zambia is not in the belt but cases occur."
+    },
+    {
+      "vaccine": "COVID-19 Vaccine",
+      "code": "COVID",
+      "doses": 2 (+ boosters)",
+      "age": "12 years+",
+      "route": "Intramuscular (IM)",
+      "site": "Upper arm (deltoid)",
+      "dose_volume": "0.5ml",
+      "storage_temp": "2-8°C (some require -20°C or -70°C depending on type)",
+      "contraindications": "Severe allergic reaction to previous dose or component",
+      "supplier": "COVAX/AU/Africa CDC",
+      "notes": "Multiple vaccine types available. Booster doses for high-risk groups. Integrated into routine EPI for target groups."
+    }
+  ],
+  "supplements": [
+    {
+      "name": "Vitamin A Supplementation",
+      "code": "VITA",
+      "doses": "Every 6 months from 6 months to 59 months",
+      "dosage": "6-11 months: 100,000 IU. 12-59 months: 200,000 IU",
+      "route": "Oral",
+      "notes": "Integrated with EPI contacts and Child Health Weeks"
+    },
+    {
+      "name": "Albendazole (De-worming)",
+      "code": "ALB",
+      "doses": "Every 6 months from 12 months to 59 months",
+      "dosage": "12-24 months: 200mg. 24-59 months: 400mg",
+      "route": "Oral",
+      "notes": "Integrated with Vitamin A distribution and Child Health Weeks"
+    }
+  ]
+}

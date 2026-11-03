@@ -1,0 +1,306 @@
+# =============================================================================
+# Edge Docker Compose — UbuntuCare (Zambia)
+# =============================================================================
+# Lightweight deployment for edge devices with no external dependencies.
+# Supports: NVIDIA Jetson, x86 with GPU, Raspberry Pi 5 (ARM), CPU-only
+# =============================================================================
+
+version: "3.9"
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-restart: &restart-policy
+  restart: unless-stopped
+
+services:
+  # ── Application Server ──────────────────────────────────────────────────
+  app:
+    <<: [*restart-policy]
+    image: ubuntucare-edge: latest
+    build:
+      context: ../../
+      dockerfile: Dockerfile.edge
+      args:
+        - DEVICE=${DEVICE:-x86}
+        - GPU_MODEL=${GPU_MODEL:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - app-data:/app/data
+      - model-cache:/app/models
+      - sync-data:/app/sync
+      - ${MODELS_DIR:-/data/models}:/app/models:ro
+      - ${DATA_DIR:-/data/ubuntucare}:/app/data
+    environment:
+      - UBUNTUCARE_ENV=offline
+      - DEVICE=${DEVICE:-x86}
+      - GPU_MODEL=${GPU_MODEL:-}
+      - DATABASE_URL=sqlite:///app/data/ubuntucare.db
+      - MODELS_DIR=/app/models
+      - SYNC_QUEUE_PATH=/app/sync/queue.db
+      - DEVICE_KEY_FILE=/app/sync/device.key
+      - LOG_LEVEL=INFO
+      - LANGUAGE_PACK=${LANGUAGE_PACK:-en}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ── Local Database ──────────────────────────────────────────────────────
+  # Uses SQLite by default (zero-config). Optionally use PostgreSQL for
+  # higher-performance edge nodes (e.g., A100, L40S).
+  db:
+    <<: [*restart-policy]
+    image: postgres:16-alpine
+    profiles:
+      - postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../../data/migrations:/docker-entrypoint-initdb.d:ro
+    environment:
+      - POSTGRES_DB=ubuntucare
+      - POSTGRES_USER=ubuntucare
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-ubuntucare_edge_secret}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    command:
+      - "-c"
+      - "wal_level=minimal"
+      - "-c"
+      - "max_wal_size=2GB"
+      - "-c"
+      - "shared_buffers=512MB"
+      - "-c"
+      - "effective_cache_size=2GB"
+      - "-c"
+      - "maintenance_work_mem=128MB"
+      - "-c"
+      - "work_mem=32MB"
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ubuntucare -d ubuntucare"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Message Queue (Local) ───────────────────────────────────────────────
+  nats:
+    <<: [*restart-policy]
+    image: nats:2.10-alpine
+    ports:
+      - "4222:4222"
+    command:
+      - "--jetstream"
+      - "--store_dir=/data/nats"
+      - "--max_payload=8MB"
+      - "--http_port=8222"
+    volumes:
+      - nats-data:/data/nats
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8222/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── Whisper (ASR) Service ──────────────────────────────────────────────
+  asr:
+    <<: [*restart-policy]
+    image: ubuntucare-asr: latest
+    build:
+      context: ../../
+      dockerfile: Dockerfile.asr
+      args:
+        - WHISPER_MODEL=${WHISPER_MODEL:-small}
+        - QUANTIZATION=${ASR_QUANT:-int8}
+    ports:
+      - "9001:9001"
+    volumes:
+      - model-cache:/models
+      - ${MODELS_DIR:-/data/models}/whisper:/models/whisper:ro
+    environment:
+      - WHISPER_MODEL=${WHISPER_MODEL:-small}
+      - QUANTIZATION=${ASR_QUANT:-int8}
+      - DEVICE=${DEVICE:-x86}
+      - NUM_WORKERS=${ASR_WORKERS:-2}
+      - MAX_BATCH_SIZE=${ASR_BATCH:-4}
+      - LOG_LEVEL=INFO
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    logging: *default-logging
+    profiles:
+      - full
+      - asr
+
+  # ── Piper (TTS) Service ─────────────────────────────────────────────────
+  tts:
+    <<: [*restart-policy]
+    image: ubuntucare-tts: latest
+    build:
+      context: ../../
+      dockerfile: Dockerfile.tts
+    ports:
+      - "9002:9002"
+    volumes:
+      - ${MODELS_DIR:-/data/models}/piper:/models/piper:ro
+    environment:
+      - PIPER_VOICE=${PIPER_VOICE:-en_US-lessac-medium}
+      - NUM_WORKERS=${TTS_WORKERS:-1}
+      - LOG_LEVEL=INFO
+    logging: *default-logging
+    profiles:
+      - full
+      - tts
+
+  # ── LLM Service ──────────────────────────────────────────────────────────
+  llm:
+    <<: [*restart-policy]
+    image: ubuntucare-llm: latest
+    build:
+      context: ../../
+      dockerfile: Dockerfile.llm
+    ports:
+      - "9003:9003"
+    volumes:
+      - ${MODELS_DIR:-/data/models}/qwen:/models/qwen:ro
+    environment:
+      - LLM_MODEL=${LLM_MODEL:-qwen3-8b}
+      - QUANTIZATION=${LLM_QUANT:-int4}
+      - MAX_CONTEXT_LENGTH=${LLM_CONTEXT:-8192}
+      - NUM_GPU_LAYERS=${LLM_GPU_LAYERS:-32}
+      - LOG_LEVEL=INFO
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    logging: *default-logging
+    profiles:
+      - full
+      - llm
+
+  # ── Embedding Service ───────────────────────────────────────────────────
+  embedding:
+    <<: [*restart-policy]
+    image: ubuntucare-embedding: latest
+    build:
+      context: ../../
+      dockerfile: Dockerfile.embedding
+    ports:
+      - "9004:9004"
+    volumes:
+      - ${MODELS_DIR:-/data/models}/stella:/models/stella:ro
+    environment:
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-stella-400m}
+      - DIMENSION=${EMBED_DIM:-768}
+      - LOG_LEVEL=INFO
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    logging: *default-logging
+    profiles:
+      - full
+      - embedding
+
+  # ── Sync Agent ──────────────────────────────────────────────────────────
+  sync-agent:
+    <<: [*restart-policy]
+    image: python:3.11-slim
+    command:
+      - "python"
+      - "/app/sync-agent.py"
+    volumes:
+      - ./sync-agent.py:/app/sync-agent.py:ro
+      - sync-data:/app/sync
+      - app-data:/app/data
+      - ${DATA_DIR:-/data/ubuntucare}:/app/data:ro
+    environment:
+      - DEVICE_KEY_FILE=/app/sync/device.key
+      - SYNC_QUEUE_PATH=/app/sync/queue.db
+      - DATABASE_URL=${DATABASE_URL:-sqlite:///app/data/ubuntucare.db}
+      - SERVER_URL=${SYNC_SERVER_URL:-}
+      - BANDWIDTH_PROFILE=${BANDWIDTH_PROFILE:-lan}
+      - LOG_LEVEL=INFO
+      - SYNC_INTERVAL_SECONDS=${SYNC_INTERVAL:-60}
+    depends_on:
+      app:
+        condition: service_healthy
+    logging: *default-logging
+    profiles:
+      - full
+      - sync
+
+  # ── Monitoring ──────────────────────────────────────────────────────────
+  prometheus:
+    <<: [*restart-policy]
+    image: prom/prometheus:v2.49.1
+    profiles:
+      - monitoring
+    ports:
+      - "9090:9090"
+    volumes:
+      - ../../scripts/monitoring/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=7d"
+    logging: *default-logging
+
+  node-exporter:
+    <<: [*restart-policy]
+    image: prom/node-exporter:v1.7.0
+    profiles:
+      - monitoring
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+    logging: *default-logging
+
+# ── Volumes ─────────────────────────────────────────────────────────────────
+volumes:
+  app-data:
+    driver: local
+  postgres-data:
+    driver: local
+  model-cache:
+    driver: local
+  sync-data:
+    driver: local
+  nats-data:
+    driver: local
+  prometheus-data:
+    driver: local

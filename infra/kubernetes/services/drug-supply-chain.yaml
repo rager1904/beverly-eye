@@ -1,0 +1,239 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: drug-supply-chain
+  namespace: healthcare
+  labels:
+    app: drug-supply-chain
+    service-type: backend
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app: drug-supply-chain
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drug-supply-chain
+  namespace: healthcare
+  labels:
+    app: drug-supply-chain
+    service-type: backend
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: drug-supply-chain
+  template:
+    metadata:
+      labels:
+        app: drug-supply-chain
+        service-type: backend
+      annotations:
+        prometheus.io/scrape:"true"
+        prometheus.io/port:"9090"
+        prometheus.io/path:"/metrics"
+    spec:
+      serviceAccountName: drug-supply-chain
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1013
+        fsGroup: 1013
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: drug-supply-chain
+          image: ubuntucare/drug-supply-chain:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: POSTGRES_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: POSTGRES_HOST
+            - name: POSTGRES_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: POSTGRES_PORT
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
+            - name: REDIS_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: REDIS_HOST
+            - name: REDIS_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: REDIS_PORT
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-credentials
+                  key: REDIS_PASSWORD
+            - name: MINIO_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: MINIO_HOST
+            - name: MINIO_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: MINIO_PORT
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: MINIO_ROOT_PASSWORD
+            - name: SUPPLY_CHAIN_SYNC_INTERVAL_MINUTES
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: SUPPLY_CHAIN_SYNC_INTERVAL_MINUTES
+            - name: SUPPLY_CHAIN_LOW_STOCK_THRESHOLD
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: SUPPLY_CHAIN_LOW_STOCK_THRESHOLD
+            - name: SUPPLY_CHAIN_EXPIRY_WARNING_DAYS
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: SUPPLY_CHAIN_EXPIRY_WARNING_DAYS
+            - name: SUPPLY_CHAIN_ORDER_MINIMUM_QUANTITY
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: SUPPLY_CHAIN_ORDER_MINIMUM_QUANTITY
+            - name: ZAMBIA_TIMEZONE
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: ZAMBIA_TIMEZONE
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: LOG_LEVEL
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 2
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: tmp
+          emptyDir: {}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - drug-supply-chain
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: drug-supply-chain-hpa
+  namespace: healthcare
+  labels:
+    app: drug-supply-chain
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: drug-supply-chain
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

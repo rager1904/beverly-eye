@@ -1,0 +1,265 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: healthcare
+
+resources:
+  - ../../base
+
+namePrefix: staging-
+
+commonLabels:
+  environment: staging
+  region: africa-south
+  country: zm
+  tier: staging
+
+patches:
+  - target:
+      kind: Deployment
+      name: .*
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/strategy
+        value:
+          type: RollingUpdate
+          rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+
+  - target:
+      kind: Deployment
+      name: asr-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: "1"
+          memory: "4Gi"
+          nvidia.com/gpu:"1"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "2"
+          memory: "8Gi"
+          nvidia.com/gpu:"1"
+
+  - target:
+      kind: Deployment
+      name: tts-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: "1"
+          memory: "2Gi"
+          nvidia.com/gpu:"1"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "2"
+          memory: "4Gi"
+          nvidia.com/gpu:"1"
+
+  - target:
+      kind: Deployment
+      name: medical-imaging
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: "1"
+          memory: "4Gi"
+          nvidia.com/gpu:"1"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "4"
+          memory: "16Gi"
+          nvidia.com/gpu:"1"
+
+  - target:
+      kind: Deployment
+      name: agent-orchestrator
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: "500m"
+          memory: "1Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "1"
+          memory: "2Gi"
+
+  - target:
+      kind: Deployment
+      name: rag-service
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: "500m"
+          memory: "1Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "1"
+          memory: "2Gi"
+
+  - target:
+      kind: Deployment
+      name: .*service
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: "200m"
+          memory: "512Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "500m"
+          memory: "1Gi"
+
+  - target:
+      kind: Deployment
+      name: api-gateway
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: "200m"
+          memory: "256Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "500m"
+          memory: "1Gi"
+
+  - target:
+      kind: StatefulSet
+      name: .*
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+
+  - target:
+      kind: StatefulSet
+      name: postgres
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: "500m"
+          memory: "2Gi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "1"
+          memory: "4Gi"
+
+  - target:
+      kind: ConfigMap
+      name: healthcare-config
+    patch: |-
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: "DEBUG"
+      - op: replace
+        path: /data/FF_MAINTENANCE_MODE
+        value: "false"
+      - op: replace
+        path: /data/FF_DEBUG_MODE
+        value: "true"
+      - op: replace
+        path: /data/ZAMBIA_LOW_BANDWIDTH_MODE
+        value: "false"
+      - op: replace
+        path: /data/CELERY_WORKER_CONCURRENCY
+        value: "2"
+
+  - target:
+      kind: HorizontalPodAutoscaler
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 1
+      - op: replace
+        path: /spec/maxReplicas
+        value: 2
+
+  - target:
+      kind: PodDisruptionBudget
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 0
+
+images:
+  - name: ubuntucare/api-gateway
+    newTag: staging-latest
+  - name: ubuntucare/emr-service
+    newTag: staging-latest
+  - name: ubuntucare/agent-orchestrator
+    newTag: staging-latest
+  - name: ubuntucare/asr-service
+    newTag: staging-latest
+  - name: ubuntucare/tts-service
+    newTag: staging-latest
+  - name: ubuntucare/rag-service
+    newTag: staging-latest
+  - name: ubuntucare/frontend
+    newTag: staging-latest
+  - name: ubuntucare/celery-worker
+    newTag: staging-latest
+  - name: ubuntucare/celery-beat
+    newTag: staging-latest
+  - name: ubuntucare/disease-surveillance
+    newTag: staging-latest
+  - name: ubuntucare/community-health
+    newTag: staging-latest
+  - name: ubuntucare/medical-imaging
+    newTag: staging-latest
+  - name: ubuntucare/drug-supply-chain
+    newTag: staging-latest
+  - name: ubuntucare/notifications
+    newTag: staging-latest
+
+configMapGenerator:
+  - name: healthcare-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=staging
+      - LOG_LEVEL=DEBUG
+
+secretGenerator:
+  - name: postgres-credentials
+    behavior: replace
+    literals:
+      - POSTGRES_PASSWORD=staging-dev-password
+  - name: redis-credentials
+    behavior: replace
+    literals:
+      - REDIS_PASSWORD=staging-dev-redis
+  - name: minio-credentials
+    behavior: replace
+    literals:
+      - MINIO_ROOT_PASSWORD=staging-dev-minio
+
+patchesStrategicMerge:
+  - ingress-patch.yaml

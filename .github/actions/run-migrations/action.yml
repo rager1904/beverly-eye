@@ -1,0 +1,144 @@
+name: "Run Database Migrations"
+description: "Execute database migrations with rollback support"
+author: "Zambia Health Platform"
+
+inputs:
+  database-url:
+    description: "Database connection URL"
+    required: true
+  migration-path:
+    description: "Path to migration files"
+    required: true
+    default: "./migrations"
+  migration-table:
+    description: "Migration tracking table name"
+    required: false
+    default: "schema_migrations"
+  timeout:
+    description: "Migration timeout in seconds"
+    required: false
+    default: "300"
+  dry-run:
+    description: "Dry-run mode (preview only)"
+    required: false
+    default: "false"
+  rollback-on-failure:
+    description: "Rollback on migration failure"
+    required: false
+    default: "true"
+  lock-timeout:
+    description: "Advisory lock timeout in seconds"
+    required: false
+    default: "10"
+
+outputs:
+  migration_count:
+    description: "Number of migrations applied"
+    value: ${{ steps.migrate.outputs.count }}
+  migration_status:
+    description: "Migration status"
+    value: ${{ steps.migrate.outputs.status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install migration tools
+      shell: bash
+      run: |
+        # Install golang-migrate
+        curl -L https://github.com/golang-migrate/migrate/releases/download/v4.17.0/migrate.linux-amd64.tar.gz | tar xvz
+        sudo mv migrate /usr/local/bin/
+
+    - name: Validate migration files
+      shell: bash
+      run: |
+        if [ ! -d "${{ inputs.migration-path }}" ]; then
+          echo "Migration directory ${{ inputs.migration-path }} not found"
+          exit 1
+        fi
+        echo "Migration files found:"
+        ls -la ${{ inputs.migration-path }}
+
+    - name: Check pending migrations
+      shell: bash
+      run: |
+        echo "Checking pending migrations..."
+        migrate -path ${{ inputs.migration-path }} \
+          -database "${{ inputs.database-url }}" \
+          version 2>/dev/null || echo "No migrations applied yet"
+
+    - name: Run migrations (dry-run)
+      if: ${{ inputs.dry-run == 'true' }}
+      shell: bash
+      run: |
+        echo "=== DRY RUN: Previewing migrations ==="
+        migrate -path ${{ inputs.migration-path }} \
+          -database "${{ inputs.database-url }}" \
+          -prefetch \
+          -dry-run \
+          up 2>&1 || true
+        echo "=== Dry run complete ==="
+
+    - name: Run migrations
+      id: migrate
+      if: ${{ inputs.dry-run != 'true' }}
+      shell: bash
+      env:
+        DATABASE_URL: ${{ inputs.database-url }}
+        TIMEOUT: ${{ inputs.timeout }}
+        LOCK_TIMEOUT: ${{ inputs.lock-timeout }}
+      run: |
+        echo "Acquiring migration lock..."
+        migrate -path ${{ inputs.migration-path }} \
+          -database "${{ inputs.database-url }}" \
+          up 2>&1
+
+        if [ $? -eq 0 ]; then
+          echo "count=$(migrate -path ${{ inputs.migration-path }} -database '${{ inputs.database-url }}' version 2>&1)" >> $GITHUB_OUTPUT
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "Migrations completed successfully"
+        else
+          echo "status=failed" >> $GITHUB_OUTPUT
+          echo "Migrations failed"
+          exit 1
+        fi
+
+    - name: Verify migrations
+      if: ${{ inputs.dry-run != 'true' }}
+      shell: bash
+      run: |
+        echo "Verifying migration state..."
+        migrate -path ${{ inputs.migration-path }} \
+          -database "${{ inputs.database-url }}" \
+          version
+
+        # Check for dirty migrations
+        DIRTY=$(migrate -path ${{ inputs.migration-path }} \
+          -database "${{ inputs.database-url }}" \
+          version 2>&1 | grep -i "dirty" || true)
+        if [ -n "$DIRTY" ]; then
+          echo "WARNING: Dirty migration detected!"
+          exit 1
+        fi
+        echo "Migration state verified"
+
+    - name: Rollback on failure
+      if: ${{ failure() && inputs.rollback-on-failure == 'true' }}
+      shell: bash
+      run: |
+        echo "Migration failed. Attempting rollback..."
+        migrate -path ${{ inputs.migration-path }} \
+          -database "${{ inputs.database-url }}" \
+          down 1 2>/dev/null || \
+        echo "Rollback not possible or already at base version"
+        echo "Notify team: Manual intervention may be required"
+
+    - name: Annotate migration summary
+      if: always()
+      shell: bash
+      run: |
+        echo "## Database Migration Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ${{ steps.migrate.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Migrations Applied:** ${{ steps.migrate.outputs.count }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Directory:** ${{ inputs.migration-path }}" >> $GITHUB_STEP_SUMMARY

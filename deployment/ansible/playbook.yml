@@ -1,0 +1,199 @@
+---
+- name: Zambia Health Platform - Server Setup
+  hosts: zambia_health
+  become: yes
+  gather_facts: yes
+  vars_files:
+    - vars.yml
+
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+  pre_tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install required system packages
+      package:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - software-properties-common
+          - python3-pip
+          - python3-setuptools
+          - unzip
+          - rsync
+          - htop
+          - iotop
+          - net-tools
+          - jq
+          - tree
+          - vim
+          - ufw
+          - fail2ban
+          - logwatch
+          - postfix
+          - acl
+        state: present
+
+  roles:
+    - role: docker
+      when: install_docker | default(true)
+
+    - role: nvidia
+      when: install_nvidia_drivers | default(false)
+
+    - role: security
+    - role: monitoring
+    - role: user_setup
+    - role: ssh_hardening
+    - role: firewall
+
+  tasks:
+    - name: Set hostname
+      hostname:
+        name: "{{ inventory_hostname }}-{{ environment }}"
+      when: set_hostname | default(true)
+
+    - name: Configure /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        regexp: "^127.0.1.1"
+        line: "127.0.1.1 {{ inventory_hostname }}-{{ environment }} {{ inventory_hostname }}"
+      when: set_hostname | default(true)
+
+    - name: Create data directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: "0755"
+      loop:
+        - /data
+        - /data/models
+        - /data/backups
+        - /data/guidelines
+        - /data/patient-data
+        - /data/logs
+        - /data/sync
+
+    - name: Create application directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: "0755"
+      loop:
+        - /opt/zambia-health
+        - /opt/zambia-health/config
+        - /opt/zambia-health/scripts
+
+    - name: Configure system limits
+      copy:
+        dest: /etc/security/limits.d/99-zambia-health.conf
+        content: |
+          # Zambia Health Platform - System Limits
+          {{ app_user }}   soft    nofile    1048576
+          {{ app_user }}   hard    nofile    1048576
+          {{ app_user }}   soft    nproc     65536
+          {{ app_user }}   hard    nproc     65536
+          {{ app_user }}   soft    memlock   unlimited
+          {{ app_user }}   hard    memlock   unlimited
+      notify: reload system limits
+
+    - name: Configure kernel parameters
+      sysctl:
+        name: "{{ item.key }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { key: "net.core.somaxconn", value: "65535" }
+        - { key: "net.core.netdev_max_backlog", value: "5000" }
+        - { key: "net.ipv4.tcp_tw_reuse", value: "1" }
+        - { key: "net.ipv4.tcp_fin_timeout", value: "30" }
+        - { key: "net.ipv4.tcp_keepalive_time", value: "300" }
+        - { key: "net.ipv4.ip_local_port_range", value: "1024 65000" }
+        - { key: "vm.swappiness", value: "10" }
+        - { key: "vm.max_map_count", value: "262144" }
+        - { key: "kernel.pid_max", value: "65536" }
+
+    - name: Configure journald
+      copy:
+        dest: /etc/systemd/journald.conf.d/99-zambia-health.conf
+        content: |
+          [Journal]
+          SystemMaxUse=5G
+          MaxFileSec=7day
+          ForwardToSyslog=no
+      notify: restart journald
+
+    - name: Deploy Kubernetes manifests
+      synchronize:
+        src: "{{ playbook_dir }}/../k8s/"
+        dest: "/opt/zambia-health/k8s/"
+        delete: yes
+      when: deploy_kubernetes | default(false)
+
+    - name: Deploy configuration files
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: "{{ app_user }}"
+        group: "{{ app_group }}"
+        mode: "{{ item.mode | default('0644') }}"
+      loop:
+        - { src: "config.yml.j2", dest: "/opt/zambia-health/config/config.yml" }
+        - { src: "docker-compose.yml.j2", dest: "/opt/zambia-health/docker-compose.yml" }
+
+    - name: Set up logrotate
+      copy:
+        dest: /etc/logrotate.d/zambia-health
+        content: |
+          /var/log/zambia-health/*.log {
+            daily
+            rotate 90
+            compress
+            delaycompress
+            missingok
+            notifempty
+            create 0640 {{ app_user }} {{ app_group }}
+            sharedscripts
+            postrotate
+              systemctl reload rsyslog 2>/dev/null || true
+            endscript
+          }
+
+    - name: Enable and start services
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+        daemon_reload: yes
+      loop:
+        - docker
+        - fail2ban
+      when: manage_services | default(true)
+      ignore_errors: yes
+
+  handlers:
+    - name: reload system limits
+      command: sysctl --system
+
+    - name: restart journald
+      systemd:
+        name: systemd-journald
+        state: restarted
+
+    - name: restart docker
+      systemd:
+        name: docker
+        state: restarted

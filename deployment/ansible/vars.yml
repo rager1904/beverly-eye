@@ -1,0 +1,199 @@
+---
+#=============================================================================
+# Zambia Health Platform - Ansible Variables
+#=============================================================================
+
+# General
+environment: "{{ ansible_env | default('production') }}"
+app_name: "zambia-health"
+app_user: "zambia"
+app_group: "zambia"
+app_uid: 1200
+app_gid: 1200
+deploy_kubernetes: false
+manage_services: true
+set_hostname: true
+timezone: "Africa/Lusaka"
+
+# Network
+primary_interface: "eth0"
+dns_servers:
+  - "8.8.8.8"
+  - "8.8.4.4"
+  - "208.67.222.222"
+ntp_servers:
+  - "africa.pool.ntp.org"
+  - "za.pool.ntp.org"
+
+# Docker
+install_docker: true
+docker_version: "24.0"
+docker_compose_version: "2.24.0"
+docker_data_root: "/data/docker"
+docker_registry_mirror: ""
+docker_log_max_size: "100m"
+docker_log_max_file: "3"
+
+# NVIDIA
+install_nvidia_drivers: false
+nvidia_driver_version: "550"
+nvidia_container_toolkit: true
+cuda_version: "12.4"
+gpu_count: 0
+
+# PostgreSQL / Database
+db_host: "localhost"
+db_port: 5432
+db_name: "zambia_health"
+db_user: "zambia_health_app"
+db_password: "{{ vault_db_password | default('CHANGE_ME') }}"
+db_pool_size: 100
+db_max_connections: 200
+pgvector_enabled: true
+
+# Redis
+redis_host: "localhost"
+redis_port: 6379
+redis_password: "{{ vault_redis_password | default('CHANGE_ME') }}"
+redis_max_memory: "4gb"
+redis_max_memory_policy: "allkeys-lru"
+
+# Monitoring
+install_monitoring: true
+monitoring_retention_days: 90
+prometheus_enabled: true
+grafana_enabled: true
+grafana_admin_password: "{{ vault_grafana_password | default('CHANGE_ME') }}"
+node_exporter_enabled: true
+alert_email: "ops@zambia-health.example.com"
+slack_webhook: "{{ vault_slack_webhook | default('') }}"
+
+# Security
+firewall_enabled: true
+ssh_hardening: true
+fail2ban_enabled: true
+ssh_port: 22
+ssh_allowed_users: "{{ app_user }}"
+ssh_allowed_groups: "sudo"
+ssh_banner_enabled: true
+ssh_permit_root_login: "no"
+ssh_password_authentication: "no"
+ssh_pubkey_authentication: "yes"
+auditd_enabled: true
+selinux_mode: "enforcing"
+apparmor_enabled: true
+
+# Zambia-Specific
+zambia_region: "Lusaka"
+zambia_province: "Lusaka Province"
+health_facility_type: "teaching_hospital"  # teaching_hospital|district_hospital|rural_health_center
+facility_name: "Eye & Dental Hospital"
+facility_code: "ZMA0001"
+moh_integration: true
+smartcare_compatible: true
+ndhis_integration: true
+local_language: "nyanja"  # nyanja|bemba|tonga|lozi|luvale|lunda|kaonde
+offline_mode: false
+low_bandwidth_mode: false
+power_backup_enabled: true
+solar_powered: false
+satellite_internet: false
+
+# Backup
+backup_enabled: true
+backup_directory: "/data/backups"
+backup_retention_daily: 7
+backup_retention_weekly: 4
+backup_retention_monthly: 12
+backup_encryption_enabled: true
+backup_remote_enabled: false
+backup_remote_url: "s3://zambia-health-prod-backups"
+backup_schedule: "0 2 * * *"  # Daily at 2 AM
+
+# Firewall Rules
+firewall_allowed_ports:
+  - { port: 22, protocol: tcp, comment: "SSH" }
+  - { port: 80, protocol: tcp, comment: "HTTP" }
+  - { port: 443, protocol: tcp, comment: "HTTPS" }
+  - { port: 3000, protocol: tcp, comment: "API" }
+  - { port: 5432, protocol: tcp, source: "10.0.0.0/8", comment: "PostgreSQL" }
+  - { port: 6379, protocol: tcp, source: "10.0.0.0/8", comment: "Redis" }
+  - { port: 6443, protocol: tcp, source: "10.0.0.0/8", comment: "Kubernetes API" }
+  - { port: 10250, protocol: tcp, source: "10.0.0.0/8", comment: "Kubelet" }
+  - { port: 9090, protocol: tcp, source: "10.0.0.0/8", comment: "Prometheus" }
+  - { port: 9100, protocol: tcp, source: "10.0.0.0/8", comment: "Node Exporter" }
+  - { port: 3001, protocol: tcp, source: "10.0.0.0/8", comment: "Grafana" }
+  - { port: 1194, protocol: udp, comment: "OpenVPN" }
+
+# Monitoring Thresholds
+monitoring_thresholds:
+  disk_warn: 80
+  disk_crit: 90
+  mem_warn: 80
+  mem_crit: 90
+  cpu_warn: 80
+  cpu_crit: 90
+  api_latency_warn: 1000
+  api_latency_crit: 5000
+
+# Docker Compose Services
+docker_compose_services:
+  api-gateway:
+    image: "ghcr.io/{{ organization }}/api-gateway:latest"
+    ports:
+      - "3000:3000"
+    environment:
+      - "NODE_ENV=production"
+      - "DB_HOST={{ db_host }}"
+      - "REDIS_HOST={{ redis_host }}"
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: "pgvector/pgvector:pg15"
+    environment:
+      - "POSTGRES_DB={{ db_name }}"
+      - "POSTGRES_USER={{ db_user }}"
+      - "POSTGRES_PASSWORD={{ db_password }}"
+    volumes:
+      - "/data/postgres:/var/lib/postgresql/data"
+    restart: unless-stopped
+
+  redis:
+    image: "redis:7-alpine"
+    command: "redis-server --requirepass {{ redis_password }} --maxmemory {{ redis_max_memory }} --maxmemory-policy {{ redis_max_memory_policy }}"
+    volumes:
+      - "/data/redis:/data"
+    restart: unless-stopped
+
+  ai-inference:
+    image: "ghcr.io/{{ organization }}/ai-inference:latest"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: "{{ gpu_count }}"
+              capabilities: [gpu]
+    volumes:
+      - "/data/models:/models"
+    restart: unless-stopped
+    environment:
+      - "CUDA_VISIBLE_DEVICES=0"
+
+  sync-service:
+    image: "ghcr.io/{{ organization }}/sync-service:latest"
+    environment:
+      - "DB_HOST={{ db_host }}"
+      - "SYNC_INTERVAL=300"
+    restart: unless-stopped
+
+# Ansible Control
+ansible_connection: ssh
+ansible_ssh_common_args: "-o StrictHostKeyChecking=no"
+ansible_python_interpreter: /usr/bin/python3
+remote_user: "{{ app_user }}"
+become_method: sudo
+timeout: 30

@@ -1,0 +1,261 @@
+# =============================================================================
+# UbuntuCare - Monitoring Stack
+# Prometheus + AlertManager + Grafana + Loki + Tempo
+# =============================================================================
+# Usage:
+#   docker compose -f docker-compose.yml -f infra/docker/base/docker-compose.monitoring.yml up -d
+# =============================================================================
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-restart: &restart-policy
+  restart: unless-stopped
+
+networks:
+  ubuntucare-monitoring:
+    external: true
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:
+  loki-data:
+  loki-index:
+  tempo-data:
+
+services:
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Prometheus
+  # ──────────────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.49.0
+    <<: *restart-policy
+    networks:
+      - ubuntucare-monitoring
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ../../config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../config/prometheus/rules/:/etc/prometheus/rules/:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-30d}"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # AlertManager
+  # ──────────────────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    <<: *restart-policy
+    networks:
+      - ubuntucare-monitoring
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ../../config/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+      - "--log.level=${LOG_LEVEL:-info}"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9093/-/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Grafana
+  # ──────────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.3.1
+    <<: *restart-policy
+    networks:
+      - ubuntucare-monitoring
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD required}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel, grafana-lokiexp-app
+      GF_SERVER_ROOT_URL: ${GRAFANA_URL:-http://localhost:3001}
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_EXPLORE_ENABLED: "true"
+      GF_FEATURE_TOGGLES_ENABLE: tempoSearch,tempoServiceMap
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ../../config/grafana/dashboards/:/etc/grafana/provisioning/dashboards/:ro
+      - ../../config/grafana/datasources/:/etc/grafana/provisioning/datasources/:ro
+      - ../../config/grafana/alerting/:/etc/grafana/provisioning/alerting/:ro
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Loki (Log aggregation)
+  # ──────────────────────────────────────────────────────────────────────
+  loki:
+    image: grafana/loki:2.9.4
+    <<: *restart-policy
+    networks:
+      - ubuntucare-monitoring
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ../../config/loki/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+      - loki-index:/loki/index
+    command:
+      - "-config.file=/etc/loki/loki.yml"
+      - "-config.expand-env=true"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Promtail (Log collector, sidecar to Loki)
+  # ──────────────────────────────────────────────────────────────────────
+  promtail:
+    image: grafana/promtail:2.9.4
+    <<: *restart-policy
+    networks:
+      - ubuntucare-monitoring
+    volumes:
+      - ../../config/loki/promtail.yml:/etc/promtail/config.yml:ro
+      - /var/log:/var/log:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command:
+      - "-config.file=/etc/promtail/config.yml"
+    depends_on:
+      - loki
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Tempo (Distributed tracing)
+  # ──────────────────────────────────────────────────────────────────────
+  tempo:
+    image: grafana/tempo:2.3.1
+    <<: *restart-policy
+    networks:
+      - ubuntucare-monitoring
+    ports:
+      - "${TEMPO_PORT:-3200}:3200"       # Tempo UI
+      - "${TEMPO_OTLP_GRPC:-4317}:4317"  # OTLP gRPC
+      - "${TEMPO_OTLP_HTTP:-4318}:4318"  # OTLP HTTP
+    volumes:
+      - ../../config/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo-data:/var/tempo
+    command:
+      - "-config.file=/etc/tempo/tempo.yml"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3200/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Node Exporter (Host metrics)
+  # ──────────────────────────────────────────────────────────────────────
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    <<: *restart-policy
+    networks:
+      - ubuntucare-monitoring
+    ports:
+      - "${NODE_EXPORTER_PORT:-9100}:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+      - "--collector.logind"
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # cAdvisor (Container metrics)
+  # ──────────────────────────────────────────────────────────────────────
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    <<: *restart-policy
+    networks:
+      - ubuntucare-monitoring
+    ports:
+      - "${CADVISOR_PORT:-8085}:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # PostgreSQL Exporter
+  # ──────────────────────────────────────────────────────────────────────
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.14.0
+    <<: *restart-policy
+    networks:
+      - ubuntucare-monitoring
+    ports:
+      - "${PG_EXPORTER_PORT:-9187}:9187"
+    environment:
+      DATA_SOURCE_NAME: postgresql://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-ubuntucare}?sslmode=disable
+    depends_on:
+      - postgres
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Redis Exporter
+  # ──────────────────────────────────────────────────────────────────────
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.57.0
+    <<: *restart-policy
+    networks:
+      - ubuntucare-monitoring
+    ports:
+      - "${REDIS_EXPORTER_PORT:-9121}:9121"
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on:
+      - redis
+    logging: *default-logging

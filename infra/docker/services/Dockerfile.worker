@@ -1,0 +1,43 @@
+# =============================================================================
+# UbuntuCare - Celery Worker
+# Async task processing for: transcription, translation, notifications
+# Model inference, report generation, drug supply chain updates
+# =============================================================================
+ARG BASE_IMAGE_TAG=latest
+FROM ubuntucare-base/python:${BASE_IMAGE_TAG} AS builder
+
+LABEL service="worker"
+
+USER root
+
+COPY infra/docker/services/requirements.worker.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+COPY src/backend/ /app/
+RUN rm -rf /app/__pycache__
+
+USER appuser
+
+FROM ubuntucare-base/python:${BASE_IMAGE_TAG}
+
+LABEL service="worker"
+
+USER root
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /app /app
+RUN chown -R appuser:appuser /app
+
+USER appuser
+WORKDIR /app
+
+ENV SERVICE_NAME=worker
+ENV CELERY_BROKER_URL=${CELERY_BROKER_URL:-redis://redis:6379/0}
+ENV CELERY_RESULT_BACKEND=${CELERY_RESULT_BACKEND:-redis://redis:6379/0}
+ENV CELERY_CONFIG_MODULE=core.queue.celery_config
+
+VOLUME ["/data"]
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8008/health')" || exit 1
+
+ENTRYPOINT ["celery", "-A", "core.queue.celery_app", "worker", "--loglevel=${CELERY_LOG_LEVEL:-info}", "--concurrency=${CELERY_CONCURRENCY:-4}", "--max-tasks-per-child=${CELERY_MAX_TASKS:-1000}", "--prefetch-multiplier=${CELERY_PREFETCH:-1}", "-Q", "${CELERY_QUEUES:-default,asr,tts,rag,emr,notifications}"]

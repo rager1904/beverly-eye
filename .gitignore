@@ -1,0 +1,238 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+.venv*/
+virtualenv/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# Environments
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+.env.staging
+*.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+*.sublime-workspace
+
+# Project specific - exclude notebook_runner.py and its output directory
+notebook_runner.py
+notebook_runner_output/
+
+# Docker
+*.log
+docker-compose.override.yml
+docker-compose.dev.yml
+
+# Model files and large data
+.models/
+*.tsbuildinfo
+*.pth
+*.pt
+*.ckpt
+*.h5
+*.pb
+*.onnx
+*.bin
+*.safetensors
+*.gguf
+*.ggml
+*.ggjt
+model*.bin
+model*.pt
+*.tflite
+*.mlmodel
+*.mlpackage
+*.pkl
+*.joblib
+
+# Audio files (if not needed in repo)
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.aac
+*.m4a
+*.wma
+*.opus
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+tmp/
+temp/
+*.bak
+*.swp
+*.swo
+*~
+
+# OS files
+Thumbs.db
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# Node
+node_modules/
+.npm/
+.yarn/
+yarn-error.log
+yarn-debug.log
+.pnp.*
+.next/
+out/
+build/
+dist/
+
+# Flutter
+flutter/build/
+flutter/.packages
+flutter/.pub-cache/
+flutter/.dart_tool/
+flutter/.flutter-plugins
+flutter/.flutter-plugins-dependencies
+flutter/ios/Pods/
+flutter/ios/.symlinks/
+flutter/android/.gradle/
+flutter/android/app/build/
+flutter/android/build/
+*.iml
+.idea/
+.dart_tool/
+.packages
+.pub/
+build/
+flutter_*.png
+coverage/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+crash.log
+override.tf
+terraform.rc
+
+# Secrets
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
+*.keystore
+secrets/
+credentials/
+*.cred
+*.credential
+
+# Data files
+*.db
+*.sqlite
+*.sqlite3
+*.csv
+*.parquet
+*.feather
+*.arrow
+*.hdf5
+*.npy
+*.npz
+data/processed/
+data/raw/
+data/interim/
+data/external/
+data/output/
+
+# Coverage
+coverage/
+.coverage*
+htmlcov/
+.coverage
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+test-results/
+junit/
+*.pytest_cache
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Docker
+.docker/
+docker-compose.override.yml
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Wandb
+wandb/

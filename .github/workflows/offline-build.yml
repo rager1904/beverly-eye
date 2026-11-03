@@ -1,0 +1,237 @@
+name: Offline/Edge Deployment Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version"
+        required: true
+        type: string
+      target_arch:
+        description: "Target architecture"
+        required: true
+        type: choice
+        options:
+          - linux/amd64
+          - linux/arm64
+          - linux/arm/v7
+      include_models:
+        description: "Include ML models in bundle"
+        type: boolean
+        default: true
+      optimize_for_edge:
+        description: "Optimize for edge devices (quantize models)"
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  VERSION: ${{ github.event.inputs.version }}
+  TARGET_ARCH: ${{ github.event.inputs.target_arch }}
+
+jobs:
+  build-optimized-images:
+    name: Build Optimized Docker Images
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - api-gateway
+          - patient-service
+          - clinical-service
+          - imaging-service
+          - auth-service
+          - sync-service
+          - notification-service
+          - audit-service
+          - offline-agent
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build multi-arch image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./services/${{ matrix.service }}
+          platforms: |
+            linux/amd64
+            linux/arm64
+            linux/arm/v7
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}:${{ env.VERSION }}
+            ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}:latest
+          labels: |
+            version=${{ env.VERSION }}
+            arch=${{ env.TARGET_ARCH }}
+            built_at=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Save image as tar
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}:${{ env.VERSION }}
+          docker save ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.service }}:${{ env.VERSION }} | gzip > ${{ matrix.service }}.tar.gz
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-image-${{ matrix.service }}
+          path: ${{ matrix.service }}.tar.gz
+          retention-days: 30
+
+  package-models:
+    name: Package ML Models for Offline
+    runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.include_models == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install onnx onnxruntime transformers sentencepiece
+
+      - name: Export and optimize models
+        run: |
+          python scripts/export_models.py \
+            --output-dir ./models-export \
+            --quantize ${{ github.event.inputs.optimize_for_edge }} \
+            --format onnx
+
+      - name: Validate models
+        uses: ./.github/actions/model-validation
+        with:
+          model-dir: ./models-export
+          framework: onnx
+          accuracy-threshold: 0.95
+
+      - name: Package models
+        run: |
+          tar -czf models-bundle.tar.gz -C ./models-export .
+          sha256sum models-bundle.tar.gz > models-bundle.sha256
+
+      - name: Upload model bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: models-bundle
+          path: |
+            models-bundle.tar.gz
+            models-bundle.sha256
+          retention-days: 90
+
+  create-deployment-bundle:
+    name: Create Deployment Bundle
+    runs-on: ubuntu-latest
+    needs:
+      - build-optimized-images
+      - package-models
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./bundle
+
+      - name: Create deployment bundle
+        run: |
+          mkdir -p ./final-bundle
+
+          # Copy deployment scripts
+          cp -r deployment/scripts ./final-bundle/
+          cp -r deployment/ansible ./final-bundle/
+          cp -r k8s/offline ./final-bundle/k8s
+
+          # Copy docker images
+          mkdir -p ./final-bundle/images
+          for f in ./bundle/docker-image-*/*.tar.gz; do
+            cp "$f" ./final-bundle/images/
+          done
+
+          # Copy models
+          if [ -d "./bundle/models-bundle" ]; then
+            cp ./bundle/models-bundle/* ./final-bundle/
+          fi
+
+          # Create install script
+          cat > ./final-bundle/install.sh << 'INSTALL'
+          #!/bin/bash
+          set -euo pipefail
+          echo "Zambia Health - Offline Deployment Installer"
+          echo "============================================"
+          # Load docker images
+          for img in images/*.tar.gz; do
+            echo "Loading $img..."
+            gunzip -c "$img" | docker load
+          done
+          # Apply Kubernetes manifests
+          kubectl apply -f k8s/ --recursive
+          echo "Installation complete!"
+          INSTALL
+          chmod +x ./final-bundle/install.sh
+
+          # Create bundle archive
+          tar -czf zambia-health-offline-${{ env.VERSION }}.tar.gz -C ./final-bundle .
+          sha256sum zambia-health-offline-${{ env.VERSION }}.tar.gz > checksum.sha256
+
+      - name: Upload deployment bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-bundle
+          path: |
+            zambia-health-offline-${{ env.VERSION }}.tar.gz
+            checksum.sha256
+          retention-days: 90
+
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: create-deployment-bundle
+    steps:
+      - name: Download deployment bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-bundle
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: offline-${{ env.VERSION }}
+          name: "Offline Deployment v${{ env.VERSION }}"
+          body: |
+            ## Offline Deployment Bundle v${{ env.VERSION }}
+
+            ### Architecture: ${{ env.TARGET_ARCH }}
+            - Optimized Docker images for all services
+            - Pre-packaged ML models (ONNX format)
+            - Deployment scripts and Kubernetes manifests
+            - Ansible playbooks for server setup
+
+            ### Installation
+            1. Transfer `zambia-health-offline-${{ env.VERSION }}.tar.gz` to target
+            2. Extract: `tar -xzf zambia-health-offline-${{ env.VERSION }}.tar.gz`
+            3. Run: `sudo ./install.sh`
+
+            ### Checksum
+            ```
+            $(cat checksum.sha256)
+            ```
+          files: |
+            zambia-health-offline-${{ env.VERSION }}.tar.gz
+            checksum.sha256

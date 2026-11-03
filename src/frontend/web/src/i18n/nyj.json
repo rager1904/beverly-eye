@@ -1,0 +1,56 @@
+{
+  "app": {
+    "name": "UbuntuCare",
+    "tagline": "Zaumoyo wogwirizana ku Zambia",
+    "description": "Nsanja yazaumoyo yokwanira yomwe imagwirizanitsa odwala, opereka chithandizo, ndi zipatala ku Zambia"
+  },
+  "nav": {
+    "dashboard": "Dashi boardi",
+    "patients": "Odwala",
+    "appointments": "Misonkhano",
+    "telemedicine": "Telemedicine",
+    "emr": "EMR",
+    "analytics": "Kusanthula",
+    "publicHealth": "Zaumoyo wa Anthu",
+    "pharmacy": "Mankhwala",
+    "laboratory": "Labu",
+    "settings": "Zokonza",
+    "logout": "Tuluka",
+    "profile": "Mbiri",
+    "notifications": "Zidziwitso"
+  },
+  "dashboard": {
+    "welcome": "Mwalandilidwa",
+    "todayAppointments": "Misonkhano Ya Lero",
+    "patientQueue": "Mzere Wa Odwala",
+    "activeTeleconsultations": "Ma Telemedicine Ogwira Ntchito",
+    "recentNotes": "Zolemba Zaposachedwa",
+    "criticalLabs": "Zotsatira Za Labu Zovuta"
+  },
+  "auth": {
+    "login": "Lowani",
+    "register": "Lembetsani",
+    "email": "Imelo",
+    "password": "Mawu Achinsinsi",
+    "signIn": "Lowani",
+    "signUp": "Lembetsani"
+  },
+  "telemedicine": {
+    "startCall": "Yambitsani Kuyimba",
+    "endCall": "Malizani Kuyimba",
+    "waitingRoom": "Chipinda Chodikira",
+    "signalQuality": "Khalidwe La Siginecha"
+  },
+  "common": {
+    "loading": "Kubwezeretsa...",
+    "error": "Cholakwika chachitika",
+    "save": "Sungani",
+    "cancel": "Lekani",
+    "delete": "Chotsani",
+    "edit": "Konzani",
+    "search": "Fufuzani",
+    "submit": "Tumizani",
+    "close": "Tsekani",
+    "noData": "Palibe deta yomwe ilipo"
+  }
+}

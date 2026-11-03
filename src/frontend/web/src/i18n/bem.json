@@ -1,0 +1,56 @@
+{
+  "app": {
+    "name": "UbuntuCare",
+    "tagline": "Ubumi bwakwe bwikala mu Zambia",
+    "description": "Icipandwa ca ubumi bwakwe ico cakwata ifyabukwata pa bakuluma, abakwata ubumi bwakwe, ne ifipandwa fya ubumi bwakwe mu Zambia"
+  },
+  "nav": {
+    "dashboard": "Icipandwa",
+    "patients": "Abakuluma",
+    "appointments": "Iciindi",
+    "telemedicine": "Telemedicine",
+    "emr": "EMR",
+    "analytics": "Analytics",
+    "publicHealth": "Ubumi Bwa Bantu Bonse",
+    "pharmacy": "Farmasi",
+    "laboratory": "Labulaleeli",
+    "settings": "Ifyakukonka",
+    "logout": "Fumamo",
+    "profile": "Icipasha",
+    "notifications": "Amalumbwa"
+  },
+  "dashboard": {
+    "welcome": "Mwabuka-bukishe",
+    "todayAppointments": "Iciindi ca Leelo",
+    "patientQueue": "Abakuluma Abalindile",
+    "activeTeleconsultations": "Amatelemedicine Yasuku",
+    "recentNotes": "Ifyakaano Fyapeepe",
+    "criticalLabs": "Imikumwa Ya Labu Iyakosa"
+  },
+  "auth": {
+    "login": "Ingila",
+    "register": "Ilembeshe",
+    "email": "Imeli",
+    "password": "Icipa ca cilelo",
+    "signIn": "Ingila",
+    "signUp": "Ilembeshe"
+  },
+  "telemedicine": {
+    "startCall": "Tampa Ukulanda",
+    "endCall": "Pwisha Ukulanda",
+    "waitingRoom": "Icipinda ca Kulindilila",
+    "signalQuality": "Ubwaume bwa Sigino"
+  },
+  "common": {
+    "loading": "Lelo baletwika...",
+    "error": "Ifyakosa filefika",
+    "save": "Sungila",
+    "cancel": "Leka",
+    "delete": "Futa",
+    "edit": "Lungika",
+    "search": "Fwayafwaya",
+    "submit": "Tumila",
+    "close": "Isala",
+    "noData": "Tapali ifyakupakanya"
+  }
+}

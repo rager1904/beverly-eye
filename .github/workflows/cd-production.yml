@@ -1,0 +1,197 @@
+name: Deploy to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version tag to deploy"
+        required: true
+        type: string
+      confirm_production:
+        description: "Confirm deployment to PRODUCTION"
+        required: true
+        type: boolean
+        default: false
+  release:
+    types: [published]
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: af-south-1
+  EKS_CLUSTER: zambia-health-prod
+  REGISTRY: ghcr.io
+  IMAGE_TAG: ${{ github.event.inputs.version || github.ref_name }}
+  SLACK_WEBHOOK: ${{ secrets.SLACK_DEPLOY_WEBHOOK }}
+  SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+jobs:
+  validate:
+    name: Validate Deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate version
+        run: |
+          if [[ ! "${{ env.IMAGE_TAG }}" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid version format. Must be semver (e.g., 1.2.3)"
+            exit 1
+          fi
+
+      - name: Check production confirmation
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [[ "${{ github.event.inputs.confirm_production }}" != "true" ]]; then
+            echo "Production deployment not confirmed"
+            exit 1
+          fi
+
+  deploy-eks:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+    needs: validate
+    timeout-minutes: 30
+    environment: production
+    outputs:
+      deployment_id: ${{ steps.deploy.outputs.deployment_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.30.0"
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+
+      - name: Run database migrations
+        uses: ./.github/actions/run-migrations
+        with:
+          database-url: ${{ secrets.PROD_DATABASE_URL }}
+          migration-path: ./migrations
+          timeout: 300
+
+      - name: Deploy services
+        id: deploy
+        uses: ./.github/actions/deploy-k8s
+        with:
+          cluster-type: eks
+          namespace: production
+          manifest-dir: ./k8s/production
+          image-tag: ${{ env.IMAGE_TAG }}
+          registry: ${{ env.REGISTRY }}
+          canary: true
+          canary-percentage: 10
+          health-check-endpoint: https://api.zambia-health.example.com/health
+          health-check-timeout: 300
+          rollout-timeout: 600
+
+      - name: Validate deployment
+        run: |
+          echo "Validating production deployment..."
+          kubectl rollout status deployment -n production --timeout=300s
+          kubectl get pods -n production -o wide
+
+  post-deploy:
+    name: Post-Deployment
+    runs-on: ubuntu-latest
+    needs: deploy-eks
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify health
+        run: |
+          curl -sf \
+            --max-time 30 \
+            --retry 5 \
+            --retry-delay 10 \
+            https://api.zambia-health.example.com/health || \
+          echo "Health check warning - manual verification needed"
+
+      - name: Run smoke tests
+        run: |
+          pip install pytest requests
+          pytest tests/smoke/ \
+            --base-url=https://api.zambia-health.example.com \
+            --junitxml=test-results/smoke.xml \
+            -v
+
+      - name: Create deployment tag
+        run: |
+          git config user.name "zambia-health-bot"
+          git config user.email "bot@zambia-health.example.com"
+          git tag -a "deploy-prod-${{ env.IMAGE_TAG }}" -m "Production deployment ${{ env.IMAGE_TAG }}"
+          git push origin "deploy-prod-${{ env.IMAGE_TAG }}"
+
+  rollback:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [deploy-eks, post-deploy]
+    if: failure()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+
+      - name: Rollback deployment
+        run: |
+          PREVIOUS_VERSION=$(kubectl rollout history deployment -n production | tail -2 | head -1 | awk '{print $1}')
+          kubectl rollout undo deployment -n production --to-revision=$PREVIOUS_VERSION
+          kubectl rollout status deployment -n production --timeout=300s
+
+      - name: Verify rollback
+        run: |
+          curl -sf --max-time 30 https://api.zambia-health.example.com/health || true
+
+  notify:
+    name: Notify Team
+    runs-on: ubuntu-latest
+    needs: [deploy-eks, post-deploy, rollback]
+    if: always()
+    steps:
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "channel": "#deployments",
+              "username": "Zambia Health Bot",
+              "attachments": [
+                {
+                  "color": "${{ needs.deploy-eks.result == 'success' && needs.post-deploy.result == 'success' && 'good' || 'danger' }}",
+                  "title": "${{ github.repository }} - Production Deploy",
+                  "fields": [
+                    { "title": "Version", "value": "${{ env.IMAGE_TAG }}", "short": true },
+                    { "title": "Status", "value": "${{ needs.deploy-eks.result }}", "short": true },
+                    { "title": "Smoke Tests", "value": "${{ needs.post-deploy.result }}", "short": true },
+                    { "title": "Environment", "value": "Production (Zambia)", "short": true },
+                    { "title": "Triggered By", "value": "${{ github.triggering_actor }}", "short": true }
+                  ],
+                  "footer": "Zambia Health Platform"
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ env.SLACK_WEBHOOK }}

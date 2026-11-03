@@ -1,0 +1,351 @@
+# =============================================================================
+# Offline Deployment Configuration — UbuntuCare (Zambia)
+# =============================================================================
+# This file controls how the platform behaves when disconnected from the cloud.
+# All settings are tuned for sub-Saharan African infrastructure constraints.
+
+version: "1.0"
+
+# ---------------------------------------------------------------------------
+# 1. Model Quantization
+# ---------------------------------------------------------------------------
+model_quantization:
+  default_precision: INT8
+  per_model:
+    whisper_small:
+      precision: INT8
+      format: onnx
+      opset: 17
+    whisper_medium:
+      precision: INT8
+      format: onnx
+    qwen3_8b:
+      precision: INT4
+      format: awq
+      group_size: 128
+    qwen3_32b:
+      precision: INT4
+      format: awq
+      group_size: 128
+    stella_embedding:
+      precision: FP16
+      format: onnx
+    piper_tts:
+      precision: FP16
+      format: onnx
+    vit_lung_xray:
+      precision: INT8
+      format: onnx
+    biobert_ner:
+      precision: INT8
+      format: onnx
+    esm2_protein:
+      precision: INT8
+      format: onnx
+
+# ---------------------------------------------------------------------------
+# 2. Edge Device GPU Memory Limits (MiB)
+# ---------------------------------------------------------------------------
+gpu_memory_limits_mib:
+  rtx_3060_12gb:
+    total: 12288
+    reserved_system: 512
+    max_model_allocation: 8192
+    fallback_to_cpu: true
+  rtx_4070_16gb:
+    total: 16384
+    reserved_system: 768
+    max_model_allocation: 12288
+    fallback_to_cpu: true
+  rtx_4090_24gb:
+    total: 24576
+    reserved_system: 1024
+    max_model_allocation: 20480
+    fallback_to_cpu: false
+  l40s_48gb:
+    total: 49152
+    reserved_system: 2048
+    max_model_allocation: 45056
+    fallback_to_cpu: false
+  a100_80gb:
+    total: 81920
+    reserved_system: 4096
+    max_model_allocation: 73728
+    fallback_to_cpu: false
+  jetson_orin_nx_16gb:
+    total: 16384
+    reserved_system: 1024
+    max_model_allocation: 12288
+    fallback_to_cpu: true
+  jetson_orin_nano_8gb:
+    total: 8192
+    reserved_system: 512
+    max_model_allocation: 6144
+    fallback_to_cpu: true
+  raspberry_pi_5:
+    total: 0
+    reserved_system: 0
+    max_model_allocation: 0
+    fallback_to_cpu: true
+    cpu_only: true
+
+gpu_memory_policy:
+  eviction: "least_recently_used"
+  offload_to_ram: true
+  shared_memory_fallback: true
+
+# ---------------------------------------------------------------------------
+# 3. Sync Intervals
+# ---------------------------------------------------------------------------
+sync_intervals:
+  critical: 30
+  high: 300
+  medium: 3600
+  low: 43200
+  heartbeat: 60
+  full_resync: 86400
+
+sync_retry:
+  max_attempts: 5
+  backoff_base_seconds: 10
+  backoff_max_seconds: 3600
+  jitter_percent: 20
+
+# ---------------------------------------------------------------------------
+# 4. Compression Settings
+# ---------------------------------------------------------------------------
+compression:
+  enabled: true
+  algorithm: gzip
+  level: 6
+  min_size_bytes: 1024
+  image_compression:
+    enabled: true
+    format: webp
+    quality: 75
+    max_dimension_px: 2048
+  batch_compression:
+    enabled: true
+    algorithm: zstd
+    level: 3
+
+# ---------------------------------------------------------------------------
+# 5. Local-First Database Settings
+# ---------------------------------------------------------------------------
+database:
+  engine: sqlite
+  sqlite:
+    path: "${DATA_DIR}/ubuntucare.db"
+    journal_mode: WAL
+    cache_size_mb: 64
+    page_size: 4096
+    synchronous: NORMAL
+    foreign_keys: true
+    busy_timeout_ms: 5000
+  postgresql_fallback:
+    enabled: false
+    host: ""
+    port: 5432
+    database: ubuntucare
+    pool_size: 5
+  vector_store:
+    engine: sqlite_vss
+    dimension: 768
+    index_type: hnsw
+    hnsw_params:
+      M: 16
+      ef_construction: 200
+      ef_search: 40
+
+replication:
+  type: "primary_replica"
+  local_role: "replica"
+  conflict_resolution: "server_wins"
+  tombstone_retention_days: 30
+
+# ---------------------------------------------------------------------------
+# 6. Battery Optimization
+# ---------------------------------------------------------------------------
+battery_optimization:
+  enabled: true
+  profiles:
+    performance:
+      cpu_governor: performance
+      sync_interval_multiplier: 1.0
+      disable_asr: false
+      disable_tts: false
+      max_battery_drain_percent_per_hour: 10
+    balanced:
+      cpu_governor: schedutil
+      sync_interval_multiplier: 2.0
+      disable_asr: false
+      disable_tts: false
+      max_battery_drain_percent_per_hour: 5
+    power_saver:
+      cpu_governor: powersave
+      sync_interval_multiplier: 5.0
+      disable_asr: true
+      disable_tts: true
+      max_battery_drain_percent_per_hour: 2
+  auto_switch:
+    enabled: true
+    battery_threshold_percent: 20
+    profile_on_threshold: power_saver
+    profile_off_charge: balanced
+  scheduled_sync:
+    enabled: true
+    window_start: "02:00"
+    window_end: "05:00"
+    timezone: "Africa/Lusaka"
+
+# ---------------------------------------------------------------------------
+# 7. Bandwidth Limits (bytes/second)
+# ---------------------------------------------------------------------------
+bandwidth_limits:
+  '2g':
+    max_download_bps: 30720
+    max_upload_bps: 15360
+    max_batch_size_mb: 1
+    sync_chunk_size_bytes: 65536
+    image_sync: false
+    video_sync: false
+    audio_sync_transcription_only: true
+    priority_only: true
+  '3g':
+    max_download_bps: 204800
+    max_upload_bps: 102400
+    max_batch_size_mb: 5
+    sync_chunk_size_bytes: 262144
+    image_sync: true
+    video_sync: false
+    audio_sync_transcription_only: true
+    priority_only: false
+  '4g':
+    max_download_bps: 5242880
+    max_upload_bps: 2097152
+    max_batch_size_mb: 25
+    sync_chunk_size_bytes: 1048576
+    image_sync: true
+    video_sync: true
+    audio_sync_transcription_only: false
+    priority_only: false
+  satellite:
+    max_download_bps: 102400
+    max_upload_bps: 51200
+    max_batch_size_mb: 2
+    sync_chunk_size_bytes: 131072
+    image_sync: false
+    video_sync: false
+    audio_sync_transcription_only: true
+    priority_only: true
+    satellite_latency_ms: 600
+  lan:
+    max_download_bps: 104857600
+    max_upload_bps: 104857600
+    max_batch_size_mb: 100
+    sync_chunk_size_bytes: 16777216
+    image_sync: true
+    video_sync: true
+    audio_sync_transcription_only: false
+    priority_only: false
+
+network_detection:
+  enabled: true
+  probe_urls:
+    - "http://connectivitycheck.platform.health.gov.zm"
+    - "http://www.msftncsi.com/ncsi.txt"
+  probe_interval_seconds: 30
+  fallback_bandwidth_profile: "2g"
+
+# ---------------------------------------------------------------------------
+# 8. Language Packs (Models to keep local)
+# ---------------------------------------------------------------------------
+language_packs:
+  default: en
+  available:
+    en:
+      name: English
+      models:
+        asr: whisper_small_en
+        tts: piper_en_US
+        nlp: qwen3_8b_en
+        nlp_quantized: qwen3_8b_int4
+        embedding: stella_en_400m
+    bem:
+      name: Chibemba (Bemba)
+      models:
+        asr: whisper_small_bem
+        tts: piper_bem
+        nlp: qwen3_8b_bem
+        embedding: stella_bem_400m
+      download_size_mb: 1800
+    nya:
+      name: Chichewa (Nyanja)
+      models:
+        asr: whisper_small_nya
+        tts: piper_nya
+        nlp: qwen3_8b_nya
+        embedding: stella_nya_400m
+      download_size_mb: 1750
+    loz:
+      name: Silozi (Lozi)
+      models:
+        asr: whisper_small_loz
+        nlp: qwen3_1b_loz
+      download_size_mb: 850
+    tum:
+      name: Chitumbuka (Tumbuka)
+      models:
+        asr: whisper_small_tum
+        nlp: qwen3_1b_tum
+      download_size_mb: 820
+    lue:
+      name: Chiluvale (Luvale)
+      models:
+        asr: whisper_small_lue
+        nlp: qwen3_1b_lue
+      download_size_mb: 800
+    lla:
+      name: Lala
+      models:
+        asr: whisper_small_lla
+        nlp: qwen3_1b_lla
+      download_size_mb: 780
+
+  local_storage_limit_mb: 8192
+  auto_download:
+    enabled: true
+    only_on_wifi: true
+    defer_if_low_battery: true
+
+# ---------------------------------------------------------------------------
+# 9. Security
+# ---------------------------------------------------------------------------
+security:
+  encryption_at_rest: true
+  encryption_algorithm: AES-256-GCM
+  key_derivation: PBKDF2-SHA256
+  key_iterations: 600000
+  device_attestation:
+    required: true
+    provider: tpm
+    fallback: software
+  local_auth:
+    pin_min_length: 6
+    biometric: true
+    session_timeout_minutes: 15
+  audit_log:
+    enabled: true
+    retention_days: 90
+    events:
+      - login
+      - logout
+      - patient_view
+      - patient_create
+      - prescription_write
+      - lab_result_view
+      - sync_start
+      - sync_complete
+      - sync_error
+      - config_change
+      - model_load

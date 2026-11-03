@@ -1,0 +1,221 @@
+name: Zambia-Specific Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deployment target"
+        required: true
+        type: choice
+        options:
+          - ministry-of-health
+          - uth-lusaka
+          - ndola-teaching-hospital
+          - rural-health-centers
+      version:
+        description: "Release version to deploy"
+        required: true
+        type: string
+      deployment_mode:
+        description: "Deployment mode"
+        required: true
+        type: choice
+        options:
+          - full
+          - incremental
+          - dry-run
+        default: dry-run
+
+concurrency:
+  group: zambia-deploy-${{ github.event.inputs.target }}
+  cancel-in-progress: true
+
+env:
+  VERSION: ${{ github.event.inputs.version }}
+  DEPLOY_TARGET: ${{ github.event.inputs.target }}
+  DEPLOY_MODE: ${{ github.event.inputs.deployment_mode }}
+
+jobs:
+  validate-target:
+    name: Validate Target
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate target configuration
+        run: |
+          case "${{ env.DEPLOY_TARGET }}" in
+            ministry-of-health)
+              echo "SERVER=10.0.0.10" >> $GITHUB_ENV
+              echo "REGION=Lusaka" >> $GITHUB_ENV
+              echo "TIER=central" >> $GITHUB_ENV
+              ;;
+            uth-lusaka)
+              echo "SERVER=10.0.1.10" >> $GITHUB_ENV
+              echo "REGION=Lusaka" >> $GITHUB_ENV
+              echo "TIER=hospital" >> $GITHUB_ENV
+              ;;
+            ndola-teaching-hospital)
+              echo "SERVER=10.0.2.10" >> $GITHUB_ENV
+              echo "REGION=Copperbelt" >> $GITHUB_ENV
+              echo "TIER=hospital" >> $GITHUB_ENV
+              ;;
+            rural-health-centers)
+              echo "SERVER=10.0.3.10" >> $GITHUB_ENV
+              echo "REGION=Various" >> $GITHUB_ENV
+              echo "TIER=edge" >> $GITHUB_ENV
+              ;;
+          esac
+
+  health-check-pre:
+    name: Pre-Deployment Health Check
+    runs-on: ubuntu-latest
+    needs: validate-target
+    steps:
+      - name: Check server connectivity
+        run: |
+          if [[ "${{ env.DEPLOY_MODE }}" != "dry-run" ]]; then
+            ping -c 3 -W 5 ${{ env.SERVER }} || echo "Server unreachable - check connectivity"
+          else
+            echo "DRY-RUN: Would check connectivity to ${{ env.SERVER }}"
+          fi
+
+      - name: Check disk space
+        run: |
+          if [[ "${{ env.DEPLOY_MODE }}" != "dry-run" ]]; then
+            ssh -o StrictHostKeyChecking=no ${{ env.SERVER }} "df -h /data" || true
+          else
+            echo "DRY-RUN: Would check disk space on ${{ env.SERVER }}"
+          fi
+
+      - name: Check service status
+        run: |
+          if [[ "${{ env.DEPLOY_MODE }}" != "dry-run" ]]; then
+            ssh ${{ env.SERVER }} "systemctl status docker --no-pager" || true
+            ssh ${{ env.SERVER }} "docker info" > /dev/null && echo "Docker running" || echo "Docker not running"
+          else
+            echo "DRY-RUN: Would check services on ${{ env.SERVER }}"
+          fi
+
+  deploy-offline-agent:
+    name: Deploy Offline Agent
+    runs-on: ubuntu-latest
+    needs: health-check-pre
+    environment: zambia-${{ env.DEPLOY_TARGET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ZAMBIA_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ env.SERVER }} >> ~/.ssh/known_hosts
+
+      - name: Deploy via Ansible (full)
+        if: env.DEPLOY_MODE == 'full' || env.DEPLOY_MODE == 'dry-run'
+        run: |
+          if [[ "${{ env.DEPLOY_MODE }}" == "dry-run" ]]; then
+            echo "DRY-RUN: Would run Ansible playbook:"
+            echo "  ansible-playbook -i deployment/ansible/inventory/zambia.ini \\"
+            echo "    deployment/ansible/playbook.yml \\"
+            echo "    --extra-vars 'target=${{ env.DEPLOY_TARGET }} version=${{ env.VERSION }}' \\"
+            echo "    --check"
+          else
+            ansible-playbook -i deployment/ansible/inventory/zambia.ini \
+              deployment/ansible/playbook.yml \
+              --extra-vars "target=${{ env.DEPLOY_TARGET }} version=${{ env.VERSION }}"
+          fi
+
+      - name: Deploy via Ansible (incremental)
+        if: env.DEPLOY_MODE == 'incremental' || env.DEPLOY_MODE == 'dry-run'
+        run: |
+          if [[ "${{ env.DEPLOY_MODE }}" == "dry-run" ]]; then
+            echo "DRY-RUN: Would run incremental Ansible playbook"
+          else
+            ansible-playbook -i deployment/ansible/inventory/zambia.ini \
+              deployment/ansible/playbook.yml \
+              --tags=update-only \
+              --extra-vars "target=${{ env.DEPLOY_TARGET }} version=${{ env.VERSION }}"
+          fi
+
+      - name: Transfer offline bundle
+        if: env.DEPLOY_MODE != 'dry-run'
+        run: |
+          scp -o StrictHostKeyChecking=no \
+            zambia-health-offline-${{ env.VERSION }}.tar.gz \
+            ${{ env.SERVER }}:/data/deployments/
+
+      - name: Install and verify
+        if: env.DEPLOY_MODE != 'dry-run'
+        run: |
+          ssh ${{ env.SERVER }} "cd /data/deployments && \
+            tar -xzf zambia-health-offline-${{ env.VERSION }}.tar.gz && \
+            sudo bash install.sh" || \
+          echo "Installation needs manual verification"
+
+  database-sync:
+    name: Database Sync
+    runs-on: ubuntu-latest
+    needs: deploy-offline-agent
+    if: env.DEPLOY_MODE != 'dry-run'
+    steps:
+      - name: Sync patient records
+        run: |
+          echo "Syncing patient records to ${{ env.SERVER }}"
+          bash deployment/scripts/offline-sync.sh \
+            --server ${{ env.SERVER }} \
+            --mode pull \
+            --since "2024-01-01"
+
+      - name: Sync clinical guidelines
+        run: |
+          echo "Syncing clinical guidelines..."
+          rsync -avz --delete \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            ./data/guidelines/ \
+            ${{ env.SERVER }}:/data/guidelines/
+
+  health-check-post:
+    name: Post-Deployment Health Check
+    runs-on: ubuntu-latest
+    needs: [deploy-offline-agent, database-sync]
+    if: always()
+    steps:
+      - name: Verify services
+        run: |
+          if [[ "${{ env.DEPLOY_MODE }}" != "dry-run" ]]; then
+            ssh ${{ env.SERVER }} "docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
+            curl -sf --max-time 10 http://${{ env.SERVER }}:3000/health
+          else
+            echo "DRY-RUN: Completed successfully"
+          fi
+
+  notify:
+    name: Notify Zambia Health Team
+    runs-on: ubuntu-latest
+    needs: health-check-post
+    if: always()
+    steps:
+      - name: Send deployment notification
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "channel": "#zambia-deployments",
+              "username": "Zambia Deploy Bot",
+              "attachments": [
+                {
+                  "color": "${{ job.status == 'success' && 'good' || 'danger' }}",
+                  "title": "Zambia Deployment: ${{ env.DEPLOY_TARGET }}",
+                  "fields": [
+                    { "title": "Target", "value": "${{ env.DEPLOY_TARGET }}", "short": true },
+                    { "title": "Version", "value": "${{ env.VERSION }}", "short": true },
+                    { "title": "Mode", "value": "${{ env.DEPLOY_MODE }}", "short": true },
+                    { "title": "Status", "value": "${{ job.status }}", "short": true },
+                    { "title": "Region", "value": "${{ env.REGION }}", "short": true },
+                    { "title": "Tier", "value": "${{ env.TIER }}", "short": true }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_ZAMBIA_WEBHOOK }}

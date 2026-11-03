@@ -1,0 +1,385 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: healthcare
+  labels:
+    app: prometheus
+    component: monitoring
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app: prometheus
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: healthcare
+  labels:
+    app: prometheus
+    component: monitoring
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+        component: monitoring
+      annotations:
+        prometheus.io/scrape:"true"
+        prometheus.io/port:"9090"
+        prometheus.io/path:"/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.50.1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9090
+              protocol: TCP
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=30d
+            - --storage.tsdb.retention.size=50GB
+            - --web.console.libraries=/etc/prometheus/console_libraries
+            - --web.console.templates=/etc/prometheus/consoles
+            - --web.enable-lifecycle
+            - --web.enable-admin-api
+            - --enable-feature=exemplar-storage
+            - --enable-feature=otlp-write-receiver
+            - --enable-feature=agent
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "2Gi"
+            limits:
+              cpu: "2"
+              memory: "8Gi"
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9090
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: prometheus-config
+              mountPath: /etc/prometheus
+            - name: prometheus-data
+              mountPath: /prometheus
+            - name: prometheus-rules
+              mountPath: /etc/prometheus/rules
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: prometheus-config
+        - name: prometheus-data
+          persistentVolumeClaim:
+            claimName: prometheus-data
+        - name: prometheus-rules
+          configMap:
+            name: prometheus-rules
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: prometheus-data
+  namespace: healthcare
+  labels:
+    app: prometheus
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 100Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: healthcare
+  labels:
+    app: prometheus
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      scrape_timeout: 10s
+      external_labels:
+        cluster: healthcare-africa-south
+        region: zm
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+                - alertmanager.healthcare.svc.cluster.local:9093
+
+    rule_files:
+      - /etc/prometheus/rules/*.yml
+
+    scrape_configs:
+      - job_name: kubernetes-apiservers
+        kubernetes_sd_configs:
+          - role: endpoints
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: default;kubernetes;https
+
+      - job_name: kubernetes-nodes
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+
+      - job_name: kubernetes-services
+        kubernetes_sd_configs:
+          - role: service
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+
+      - job_name: postgres
+        static_configs:
+          - targets:
+              - postgres.healthcare.svc.cluster.local:9187
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: instance
+            replacement: postgres
+
+      - job_name: redis
+        static_configs:
+          - targets:
+              - redis.healthcare.svc.cluster.local:9121
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: instance
+            replacement: redis
+
+      - job_name: qdrant
+        static_configs:
+          - targets:
+              - qdrant.healthcare.svc.cluster.local:9090
+
+      - job_name: weaviate
+        static_configs:
+          - targets:
+              - weaviate.healthcare.svc.cluster.local:8080
+        metrics_path: /metrics
+
+      - job_name: minio
+        static_configs:
+          - targets:
+              - minio.healthcare.svc.cluster.local:9000
+        metrics_path: /minio/v2/metrics/cluster
+
+      - job_name: node-exporter
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-rules
+  namespace: healthcare
+  labels:
+    app: prometheus
+data:
+  recording-rules.yml: |
+    groups:
+      - name: recording_rules
+        interval: 1m
+        rules:
+          - record: service: http_requests_total: rate5m
+            expr: sum(rate(http_requests_total[5m])) by (service, method, status)
+          - record: service: http_request_duration_seconds: p95
+            expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le))
+          - record: service: http_request_duration_seconds: p99
+            expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le))
+
+  alerting-rules.yml: |
+    groups:
+      - name: service_alerts
+        interval: 1m
+        rules:
+          - alert: HighErrorRate
+            expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "High HTTP error rate ({{ $value | humanizePercentage }}) for {{ $labels.service }}"
+              description: "Service {{ $labels.service }} has error rate of {{ $value | humanizePercentage }} for the last 5 minutes"
+
+          - alert: HighLatency
+            expr: service: http_request_duration_seconds: p99 > 5
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High latency ({{ $value }}s) for {{ $labels.service }}"
+              description: "Service {{ $labels.service }} has p99 latency of {{ $value }}s for the last 5 minutes"
+
+          - alert: ServiceDown
+            expr: up == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Service {{ $labels.instance }} is down"
+              description: "{{ $labels.instance }} has been down for more than 2 minutes"
+
+          - alert: CPUThrottling
+            expr: rate(container_cpu_cfs_throttled_seconds_total[5m]) > 0.1
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "CPU throttling detected for {{ $labels.pod_name }}"
+              description: "Pod {{ $labels.pod_name }} is experiencing CPU throttling"
+
+          - alert: MemoryPressure
+            expr: container_memory_working_set_bytes / container_spec_memory_limit_bytes > 0.9
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Memory pressure for {{ $labels.pod_name }}"
+              description: "Pod {{ $labels.pod_name }} is using >90% of memory limit"
+
+      - name: infrastructure_alerts
+        interval: 1m
+        rules:
+          - alert: DiskSpaceLow
+            expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Disk space low on {{ $labels.node }}"
+              description: "Disk space on {{ $labels.node }} is below 10%"
+
+          - alert: DatabaseConnectionPoolExhausted
+            expr: pg_stat_database_numbackends / pg_settings_max_connections > 0.8
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Database connection pool nearly exhausted"
+              description: "PostgreSQL connection pool is at {{ $value | humanizePercentage }} capacity"
+
+          - alert: QdrantSegmentCountHigh
+            expr: qdrant_collection_segments_count > 20
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High segment count in Qdrant collection"
+              description: "Qdrant collection has {{ $value }} segments, may need optimization"
+
+      - name: gpu_alerts
+        interval: 1m
+        rules:
+          - alert: GPUMemoryHigh
+            expr: DCGM_FI_DEV_FB_USED / DCGM_FI_DEV_FB_TOTAL > 0.9
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "GPU memory utilization >90% on {{ $labels.kubernetes_io_hostname }}"
+              description: "GPU memory is at {{ $value | humanizePercentage }} on {{ $labels.kubernetes_io_hostname }}"
+
+          - alert: GPUTemperatureHigh
+            expr: DCGM_FI_DEV_GPU_TEMP > 85
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "GPU temperature >85C on {{ $labels.kubernetes_io_hostname }}"
+              description: "GPU temperature is {{ $value }}C on {{ $labels.kubernetes_io_hostname }}"

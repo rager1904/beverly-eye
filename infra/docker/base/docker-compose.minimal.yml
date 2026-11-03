@@ -1,0 +1,435 @@
+# =============================================================================
+# UbuntuCare - Minimal Edge Deployment
+# For rural clinics with RTX 3060/4070, single machine
+# All essential services, no external dependencies
+# =============================================================================
+# Usage:
+#   docker compose -f infra/docker/base/docker-compose.minimal.yml up -d
+# =============================================================================
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "5m"
+    max-file: "2"
+
+x-restart: &restart-policy
+  restart: always
+
+x-gpu-resources: &gpu-resources
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: all
+          capabilities: [gpu]
+
+networks:
+  ubuntucare-minimal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
+  model-cache:
+  audio-data:
+
+services:
+
+  # ──────────────────────────────────────────────────────────────────────
+  # PostgreSQL (pgvector)
+  # ──────────────────────────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg15
+    <<: *restart-policy
+    networks:
+      - ubuntucare-minimal
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ubuntucare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ubuntucare123}
+      POSTGRES_DB: ${POSTGRES_DB:-ubuntucare_minimal}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ubuntucare}"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Redis
+  # ──────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    <<: *restart-policy
+    networks:
+      - ubuntucare-minimal
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "5"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # MinIO (local S3, single disk)
+  # ──────────────────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    <<: *restart-policy
+    networks:
+      - ubuntucare-minimal
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_USER:-ubuntucare}
+      MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD:-ubuntucare123}
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # MinIO bucket setup
+  # ──────────────────────────────────────────────────────────────────────
+  minio-setup:
+    image: minio/mc:latest
+    <<: *restart-policy
+    networks:
+      - ubuntucare-minimal
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set local http://minio:9000 ${MINIO_USER:-ubuntucare} ${MINIO_PASSWORD:-ubuntucare123};
+      mc mb -p local/audio-recordings;
+      mc mb -p local/medical-images;
+      mc mb -p local/reports;
+      echo 'MinIO buckets ready';
+      "
+
+  # ──────────────────────────────────────────────────────────────────────
+  # API Gateway
+  # ──────────────────────────────────────────────────────────────────────
+  api-gateway:
+    build:
+      context: ../../
+      dockerfile: infra/docker/services/Dockerfile.api-gateway
+    <<: *restart-policy
+    networks:
+      - ubuntucare-minimal
+    ports:
+      - "8000:8000"
+    environment:
+      SERVICE_NAME: api-gateway
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:-ubuntucare123}@postgres:5432/${POSTGRES_DB:-ubuntucare_minimal}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_USER:-ubuntucare}
+      MINIO_SECRET_KEY: ${MINIO_PASSWORD:-ubuntucare123}
+      OFFLINE_MODE: "true"
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # EMR Service
+  # ──────────────────────────────────────────────────────────────────────
+  emr:
+    build:
+      context: ../../
+      dockerfile: infra/docker/services/Dockerfile.emr
+    <<: *restart-policy
+    networks:
+      - ubuntucare-minimal
+    ports:
+      - "8001:8001"
+    environment:
+      SERVICE_NAME: emr
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:-ubuntucare123}@postgres:5432/${POSTGRES_DB:-ubuntucare_minimal}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_USER:-ubuntucare}
+      MINIO_SECRET_KEY: ${MINIO_PASSWORD:-ubuntucare123}
+      OFFLINE_MODE: "true"
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Agent Orchestrator (AI - uses GPU)
+  # ──────────────────────────────────────────────────────────────────────
+  agent-orchestrator:
+    build:
+      context: ../../
+      dockerfile: infra/docker/services/Dockerfile.agent-orchestrator
+    <<: *restart-policy
+    <<: *gpu-resources
+    networks:
+      - ubuntucare-minimal
+    ports:
+      - "8002:8002"
+    environment:
+      SERVICE_NAME: agent-orchestrator
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:-ubuntucare123}@postgres:5432/${POSTGRES_DB:-ubuntucare_minimal}
+      REDIS_URL: redis://redis:6379/0
+      LLM__MODEL_PATH: /data/models/llm/llama-2-7b-chat.Q4_K_M.gguf
+      LLM__CONTEXT_LENGTH: 2048
+      LLM__N_GPU_LAYERS: ${LLM_N_GPU_LAYERS:-20}
+      ASR__SERVICE_URL: http://asr:8003
+      TTS__SERVICE_URL: http://tts:8004
+      OFFLINE_MODE: "true"
+      LOG_LEVEL: info
+    volumes:
+      - model-cache:/data/models:ro
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # ASR (Whisper - GPU)
+  # ──────────────────────────────────────────────────────────────────────
+  asr:
+    build:
+      context: ../../
+      dockerfile: infra/docker/services/Dockerfile.asr
+    <<: *restart-policy
+    <<: *gpu-resources
+    networks:
+      - ubuntucare-minimal
+    ports:
+      - "8003:8003"
+    environment:
+      SERVICE_NAME: asr
+      WHISPER_MODEL_SIZE: base
+      WHISPER_DEVICE: cuda
+      WHISPER_COMPUTE_TYPE: float16
+      WHISPER_LANGUAGE: en
+      REDIS_URL: redis://redis:6379/0
+      OFFLINE_MODE: "true"
+      LOG_LEVEL: info
+    volumes:
+      - model-cache:/data/models:ro
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 45s
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # TTS (Coqui - GPU)
+  # ──────────────────────────────────────────────────────────────────────
+  tts:
+    build:
+      context: ../../
+      dockerfile: infra/docker/services/Dockerfile.tts
+    <<: *restart-policy
+    <<: *gpu-resources
+    networks:
+      - ubuntucare-minimal
+    ports:
+      - "8004:8004"
+    environment:
+      SERVICE_NAME: tts
+      TTS__DEVICE: cuda
+      REDIS_URL: redis://redis:6379/0
+      OFFLINE_MODE: "true"
+      LOG_LEVEL: info
+    volumes:
+      - model-cache:/data/models:ro
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 45s
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # RAG (Embedding - GPU)
+  # ──────────────────────────────────────────────────────────────────────
+  rag:
+    build:
+      context: ../../
+      dockerfile: infra/docker/services/Dockerfile.rag
+    <<: *restart-policy
+    <<: *gpu-resources
+    networks:
+      - ubuntucare-minimal
+    ports:
+      - "8005:8005"
+    environment:
+      SERVICE_NAME: rag
+      RAG__EMBEDDING_MODEL: BAAI/bge-small-en-v1.5
+      RAG__DEVICE: cuda
+      RAG__QDRANT_HOST: qdrant
+      RAG__QDRANT_PORT: 6333
+      REDIS_URL: redis://redis:6379/0
+      OFFLINE_MODE: "true"
+      LOG_LEVEL: info
+    volumes:
+      - model-cache:/data/models:ro
+    depends_on:
+      - redis
+      - qdrant
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Qdrant (lightweight vector DB)
+  # ──────────────────────────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.8.0
+    <<: *restart-policy
+    networks:
+      - ubuntucare-minimal
+    ports:
+      - "6333:6333"
+    volumes:
+      - model-cache:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Celery Worker
+  # ──────────────────────────────────────────────────────────────────────
+  worker:
+    build:
+      context: ../../
+      dockerfile: infra/docker/services/Dockerfile.worker
+    <<: *restart-policy
+    <<: *gpu-resources
+    networks:
+      - ubuntucare-minimal
+    environment:
+      SERVICE_NAME: worker
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_CONCURRENCY: 2
+      CELERY_QUEUES: default,asr,tts,rag,emr
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:-ubuntucare123}@postgres:5432/${POSTGRES_DB:-ubuntucare_minimal}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_USER:-ubuntucare}
+      MINIO_SECRET_KEY: ${MINIO_PASSWORD:-ubuntucare123}
+      OFFLINE_MODE: "true"
+      LOG_LEVEL: info
+    volumes:
+      - model-cache:/data/models:ro
+    depends_on:
+      - redis
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A core.queue.celery_app status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Celery Beat
+  # ──────────────────────────────────────────────────────────────────────
+  celery-beat:
+    build:
+      context: ../../
+      dockerfile: infra/docker/services/Dockerfile.worker
+    <<: *restart-policy
+    networks:
+      - ubuntucare-minimal
+    environment:
+      SERVICE_NAME: celery-beat
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:-ubuntucare123}@postgres:5432/${POSTGRES_DB:-ubuntucare_minimal}
+      OFFLINE_MODE: "true"
+      LOG_LEVEL: info
+    depends_on:
+      - redis
+      - postgres
+    entrypoint: ["celery", "-A", "core.queue.celery_app", "beat", "--loglevel=info"]
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Frontend
+  # ──────────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ../../
+      dockerfile: infra/docker/services/Dockerfile.frontend
+    <<: *restart-policy
+    networks:
+      - ubuntucare-minimal
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: /api/v1
+      API_INTERNAL_URL: http://api-gateway:8000
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    logging: *default-logging

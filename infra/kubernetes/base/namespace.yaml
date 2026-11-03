@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: healthcare
+  labels:
+    name: healthcare
+    platform: ubuntucare
+    environment: base
+    region: africa-south
+    country: zm
+    pod-security.kubernetes.io/enforce:restricted
+    pod-security.kubernetes.io/enforce-version:v1.25
+    pod-security.kubernetes.io/audit:restricted
+    pod-security.kubernetes.io/warn:restricted
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: healthcare-quota
+  namespace: healthcare
+spec:
+  hard:
+    requests.cpu: "32"
+    requests.memory: "128Gi"
+    limits.cpu: "64"
+    limits.memory: "256Gi"
+    requests.nvidia.com/gpu:"4"
+    persistentvolumeclaims: "30"
+    pods: "100"
+    services: "50"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: healthcare-limits
+  namespace: healthcare
+spec:
+  limits:
+    - default:
+        cpu: "1"
+        memory: "1Gi"
+      defaultRequest:
+        cpu: "100m"
+        memory: "256Mi"
+      type: Container

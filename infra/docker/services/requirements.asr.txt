@@ -1,0 +1,7 @@
+# ASR (faster-whisper) - CPU-optimized for dev, no torch needed
+faster-whisper>=1.0.0
+soundfile>=0.12.1
+librosa>=0.10.0
+numpy>=1.24.0
+fastapi>=0.109.0
+python-multipart>=0.0.6

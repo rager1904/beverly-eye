@@ -1,0 +1,56 @@
+{
+  "app": {
+    "name": "UbuntuCare",
+    "tagline": "Bupilo bwa Zambiana",
+    "description": "Seketulu ye bupilo ye kwa kukona fa batu ba kula, ba ba fa bupilo, ni mafelelo a bupilo kwa Zambia"
+  },
+  "nav": {
+    "dashboard": "Dashi boardi",
+    "patients": "Bakuli",
+    "appointments": "Linako",
+    "telemedicine": "Telemedicine",
+    "emr": "EMR",
+    "analytics": "Kuhupula",
+    "publicHealth": "Bupilo Bwa Batu",
+    "pharmacy": "Mushonga",
+    "laboratory": "Labu",
+    "settings": "Mitalo",
+    "logout": "Twa",
+    "profile": "Sipali",
+    "notifications": "Likuta"
+  },
+  "dashboard": {
+    "welcome": "Mukwa mulaile",
+    "todayAppointments": "Linako La Kacenu",
+    "patientQueue": "Muloko O Bakuli",
+    "activeTeleconsultations": "Matelemedicine A sebetsa",
+    "recentNotes": "Mangolo A Bufitaha",
+    "criticalLabs": "Lipipo Za Labu Ze Tusa"
+  },
+  "auth": {
+    "login": "Kena",
+    "register": "Ingisa",
+    "email": "Imeeli",
+    "password": "Lizwe La Kunyandile",
+    "signIn": "Kena",
+    "signUp": "Ingisa"
+  },
+  "telemedicine": {
+    "startCall": "Qala Ku Pila",
+    "endCall": "Felisa Ku Pila",
+    "waitingRoom": "Sikamelo Sa Kulibelela",
+    "signalQuality": "Mukwa O Sigino"
+  },
+  "common": {
+    "loading": "Likalilela...",
+    "error": "Sifokofoko se sikaheza",
+    "save": "Bulela",
+    "cancel": "Lekela",
+    "delete": "Felisa",
+    "edit": "Lukisa",
+    "search": "Batanga",
+    "submit": "Lumeza",
+    "close": "Yala",
+    "noData": "Haku na data"
+  }
+}

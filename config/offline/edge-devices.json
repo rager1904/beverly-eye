@@ -1,0 +1,544 @@
+{
+  "schema_version": "1.0",
+  "description": "Supported edge hardware configurations for UbuntuCare in Zambia",
+  "devices": {
+    "rtx_3060_12gb": {
+      "name": "NVIDIA RTX 3060 12GB",
+      "compute_capability": "8.6",
+      "memory_mib": 12288,
+      "memory_bandwidth_gbps": 360,
+      "tflops_fp16": 12.7,
+      "tflops_int8": 25.4,
+      "supported_models": {
+        "asr": {
+          "model": "whisper-small",
+          "quantization": "INT8",
+          "max_batch_size": 8,
+          "max_audio_seconds": 120,
+          "max_concurrent": 2,
+          "latency_p50_ms": 120,
+          "latency_p95_ms": 350
+        },
+        "tts": {
+          "model": "piper",
+          "quantization": "FP16",
+          "max_batch_size": 4,
+          "max_concurrent": 2
+        },
+        "llm": {
+          "model": "Qwen3-8B",
+          "quantization": "INT4_AWQ",
+          "max_batch_size": 1,
+          "max_context_length": 8192,
+          "max_concurrent": 1,
+          "tokens_per_second": 28,
+          "kv_cache_quantization": "FP16"
+        },
+        "embedding": {
+          "model": "stella-400m",
+          "quantization": "FP16",
+          "max_batch_size": 16,
+          "embedding_dimension": 768
+        },
+        "vision": {
+          "model": "vit-lung-xray",
+          "quantization": "INT8",
+          "max_batch_size": 4,
+          "max_image_resolution": 1024
+        }
+      },
+      "recommended_batch_sizes": {
+        "small": 4,
+        "medium": 2,
+        "large": 1
+      },
+      "max_concurrent_models": 3,
+      "power_profile": {
+        "idle_watts": 60,
+        "load_watts": 170,
+        "max_watts": 200
+      }
+    },
+    "rtx_4070_16gb": {
+      "name": "NVIDIA RTX 4070 16GB",
+      "compute_capability": "8.9",
+      "memory_mib": 16384,
+      "memory_bandwidth_gbps": 504,
+      "tflops_fp16": 29.2,
+      "tflops_int8": 58.4,
+      "supported_models": {
+        "asr": {
+          "model": "whisper-small",
+          "quantization": "INT8",
+          "max_batch_size": 12,
+          "max_audio_seconds": 180,
+          "max_concurrent": 3,
+          "latency_p50_ms": 80,
+          "latency_p95_ms": 250
+        },
+        "asr_medium": {
+          "model": "whisper-medium",
+          "quantization": "INT8",
+          "max_batch_size": 4,
+          "max_audio_seconds": 120,
+          "max_concurrent": 2,
+          "latency_p50_ms": 350,
+          "latency_p95_ms": 900
+        },
+        "tts": {
+          "model": "piper",
+          "quantization": "FP16",
+          "max_batch_size": 8,
+          "max_concurrent": 4
+        },
+        "llm": {
+          "model": "Qwen3-8B",
+          "quantization": "INT4_AWQ",
+          "max_batch_size": 1,
+          "max_context_length": 16384,
+          "max_concurrent": 2,
+          "tokens_per_second": 42,
+          "kv_cache_quantization": "INT8"
+        },
+        "embedding": {
+          "model": "stella-400m",
+          "quantization": "FP16",
+          "max_batch_size": 32,
+          "embedding_dimension": 768
+        },
+        "vision": {
+          "model": "vit-lung-xray",
+          "quantization": "INT8",
+          "max_batch_size": 8,
+          "max_image_resolution": 1024
+        },
+        "ner": {
+          "model": "biobert-ner",
+          "quantization": "INT8",
+          "max_batch_size": 16,
+          "max_concurrent": 2
+        }
+      },
+      "recommended_batch_sizes": {
+        "small": 8,
+        "medium": 4,
+        "large": 2
+      },
+      "max_concurrent_models": 4,
+      "power_profile": {
+        "idle_watts": 50,
+        "load_watts": 200,
+        "max_watts": 250
+      }
+    },
+    "rtx_4090_24gb": {
+      "name": "NVIDIA RTX 4090 24GB",
+      "compute_capability": "8.9",
+      "memory_mib": 24576,
+      "memory_bandwidth_gbps": 1008,
+      "tflops_fp16": 82.6,
+      "tflops_int8": 165.2,
+      "supported_models": {
+        "asr": {
+          "model": "whisper-large-v3",
+          "quantization": "INT8",
+          "max_batch_size": 16,
+          "max_audio_seconds": 300,
+          "max_concurrent": 4,
+          "latency_p50_ms": 60,
+          "latency_p95_ms": 200
+        },
+        "tts": {
+          "model": "piper",
+          "quantization": "FP16",
+          "max_batch_size": 16,
+          "max_concurrent": 8
+        },
+        "llm": {
+          "model": "Qwen3-32B",
+          "quantization": "INT4_AWQ",
+          "max_batch_size": 1,
+          "max_context_length": 32768,
+          "max_concurrent": 2,
+          "tokens_per_second": 55,
+          "kv_cache_quantization": "INT8"
+        },
+        "llm_small": {
+          "model": "Qwen3-8B",
+          "quantization": "INT4_AWQ",
+          "max_batch_size": 4,
+          "max_context_length": 32768,
+          "max_concurrent": 4,
+          "tokens_per_second": 85
+        },
+        "embedding": {
+          "model": "stella-400m",
+          "quantization": "FP16",
+          "max_batch_size": 64,
+          "embedding_dimension": 768
+        },
+        "vision": {
+          "model": "vit-lung-xray",
+          "quantization": "INT8",
+          "max_batch_size": 16,
+          "max_image_resolution": 2048
+        },
+        "ner": {
+          "model": "biobert-ner",
+          "quantization": "INT8",
+          "max_batch_size": 32,
+          "max_concurrent": 4
+        },
+        "protein": {
+          "model": "esm2-650m",
+          "quantization": "INT8",
+          "max_batch_size": 8
+        }
+      },
+      "recommended_batch_sizes": {
+        "small": 16,
+        "medium": 8,
+        "large": 4
+      },
+      "max_concurrent_models": 6,
+      "power_profile": {
+        "idle_watts": 80,
+        "load_watts": 350,
+        "max_watts": 450
+      }
+    },
+    "l40s_48gb": {
+      "name": "NVIDIA L40S 48GB",
+      "compute_capability": "8.9",
+      "memory_mib": 49152,
+      "memory_bandwidth_gbps": 864,
+      "tflops_fp16": 91.6,
+      "tflops_int8": 183.2,
+      "supported_models": {
+        "asr": {
+          "model": "whisper-large-v3",
+          "quantization": "FP16",
+          "max_batch_size": 32,
+          "max_audio_seconds": 600,
+          "max_concurrent": 8,
+          "latency_p50_ms": 40,
+          "latency_p95_ms": 150
+        },
+        "tts": {
+          "model": "piper",
+          "quantization": "FP16",
+          "max_batch_size": 32,
+          "max_concurrent": 16
+        },
+        "llm": {
+          "model": "Qwen3-32B",
+          "quantization": "INT4_AWQ",
+          "max_batch_size": 4,
+          "max_context_length": 65536,
+          "max_concurrent": 4,
+          "tokens_per_second": 72,
+          "kv_cache_quantization": "INT8"
+        },
+        "embedding": {
+          "model": "stella-400m",
+          "quantization": "FP16",
+          "max_batch_size": 128,
+          "embedding_dimension": 768
+        },
+        "vision": {
+          "model": "vit-lung-xray",
+          "quantization": "FP16",
+          "max_batch_size": 32,
+          "max_image_resolution": 4096
+        },
+        "ner": {
+          "model": "biobert-ner",
+          "quantization": "INT8",
+          "max_batch_size": 64,
+          "max_concurrent": 8
+        },
+        "protein": {
+          "model": "esm2-650m",
+          "quantization": "INT8",
+          "max_batch_size": 16
+        }
+      },
+      "recommended_batch_sizes": {
+        "small": 32,
+        "medium": 16,
+        "large": 8
+      },
+      "max_concurrent_models": 8,
+      "power_profile": {
+        "idle_watts": 70,
+        "load_watts": 250,
+        "max_watts": 350
+      },
+      "server_grade": true
+    },
+    "a100_80gb": {
+      "name": "NVIDIA A100 80GB",
+      "compute_capability": "8.0",
+      "memory_mib": 81920,
+      "memory_bandwidth_gbps": 2039,
+      "tflops_fp16": 312,
+      "tflops_int8": 624,
+      "supported_models": {
+        "asr": {
+          "model": "whisper-large-v3",
+          "quantization": "FP16",
+          "max_batch_size": 64,
+          "max_audio_seconds": 600,
+          "max_concurrent": 16,
+          "latency_p50_ms": 25,
+          "latency_p95_ms": 100
+        },
+        "tts": {
+          "model": "piper",
+          "quantization": "FP16",
+          "max_batch_size": 64,
+          "max_concurrent": 32
+        },
+        "llm": {
+          "model": "Qwen3-32B",
+          "quantization": "INT4_AWQ",
+          "max_batch_size": 8,
+          "max_context_length": 131072,
+          "max_concurrent": 8,
+          "tokens_per_second": 120,
+          "kv_cache_quantization": "INT8"
+        },
+        "llm_multi": {
+          "model": "Qwen3-32B",
+          "quantization": "FP16",
+          "max_batch_size": 2,
+          "max_context_length": 65536,
+          "max_concurrent": 4,
+          "tokens_per_second": 180
+        },
+        "embedding": {
+          "model": "stella-400m",
+          "quantization": "FP16",
+          "max_batch_size": 256,
+          "embedding_dimension": 768
+        },
+        "vision": {
+          "model": "vit-lung-xray",
+          "quantization": "FP16",
+          "max_batch_size": 64,
+          "max_image_resolution": 4096
+        },
+        "ner": {
+          "model": "biobert-ner",
+          "quantization": "FP16",
+          "max_batch_size": 128,
+          "max_concurrent": 16
+        },
+        "protein": {
+          "model": "esm2-3b",
+          "quantization": "INT8",
+          "max_batch_size": 32
+        }
+      },
+      "recommended_batch_sizes": {
+        "small": 64,
+        "medium": 32,
+        "large": 16
+      },
+      "max_concurrent_models": 12,
+      "power_profile": {
+        "idle_watts": 150,
+        "load_watts": 400,
+        "max_watts": 500
+      },
+      "server_grade": true,
+      "multi_instance_gpu": {
+        "enabled": true,
+        "max_instances": 7,
+        "instance_profiles": ["1g.10gb", "2g.20gb", "3g.40gb", "4g.40gb", "7g.80gb"]
+      }
+    },
+    "jetson_orin_nx_16gb": {
+      "name": "NVIDIA Jetson Orin NX 16GB",
+      "architecture": "ARMv8.2-A",
+      "compute_capability": "8.7",
+      "memory_mib": 16384,
+      "memory_bandwidth_gbps": 102.4,
+      "tflops_fp16": 5.3,
+      "tflops_int8": 10.6,
+      "power_modes_watts": [10, 15, 25],
+      "supported_models": {
+        "asr": {
+          "model": "whisper-tiny",
+          "quantization": "INT8",
+          "max_batch_size": 1,
+          "max_audio_seconds": 30,
+          "max_concurrent": 1,
+          "latency_p50_ms": 800,
+          "latency_p95_ms": 2000
+        },
+        "tts": {
+          "model": "piper-tiny",
+          "quantization": "FP16",
+          "max_batch_size": 1,
+          "max_concurrent": 1
+        },
+        "llm": {
+          "model": "Qwen3-1B",
+          "quantization": "INT4_AWQ",
+          "max_batch_size": 1,
+          "max_context_length": 4096,
+          "max_concurrent": 1,
+          "tokens_per_second": 15,
+          "kv_cache_quantization": "INT8"
+        },
+        "embedding": {
+          "model": "stella-100m",
+          "quantization": "FP16",
+          "max_batch_size": 4,
+          "embedding_dimension": 384
+        },
+        "vision": {
+          "model": "vit-lung-xray-tiny",
+          "quantization": "INT8",
+          "max_batch_size": 1,
+          "max_image_resolution": 512
+        }
+      },
+      "recommended_batch_sizes": {
+        "small": 1,
+        "medium": 1,
+        "large": 1
+      },
+      "max_concurrent_models": 2,
+      "deep_learning_accelerators": ["NVDLA v2", "PVA v2"],
+      "jetpack_version": "6.0",
+      "max_power_watts": 25
+    },
+    "jetson_orin_nano_8gb": {
+      "name": "NVIDIA Jetson Orin Nano 8GB",
+      "architecture": "ARMv8.2-A",
+      "compute_capability": "8.7",
+      "memory_mib": 8192,
+      "memory_bandwidth_gbps": 68,
+      "tflops_fp16": 2.7,
+      "tflops_int8": 5.4,
+      "power_modes_watts": [7, 10, 15],
+      "supported_models": {
+        "asr": {
+          "model": "whisper-tiny",
+          "quantization": "INT8",
+          "max_batch_size": 1,
+          "max_audio_seconds": 15,
+          "max_concurrent": 1,
+          "latency_p50_ms": 1500,
+          "latency_p95_ms": 3500
+        },
+        "tts": {
+          "model": "piper-tiny",
+          "quantization": "FP16",
+          "max_batch_size": 1,
+          "max_concurrent": 1
+        },
+        "llm": {
+          "model": "Qwen3-0.5B",
+          "quantization": "INT4_AWQ",
+          "max_batch_size": 1,
+          "max_context_length": 2048,
+          "max_concurrent": 1,
+          "tokens_per_second": 10
+        },
+        "embedding": {
+          "model": "stella-100m",
+          "quantization": "INT8",
+          "max_batch_size": 2,
+          "embedding_dimension": 384
+        }
+      },
+      "recommended_batch_sizes": {
+        "small": 1,
+        "medium": 1,
+        "large": 1
+      },
+      "max_concurrent_models": 1,
+      "deep_learning_accelerators": ["NVDLA v2"],
+      "jetpack_version": "6.0",
+      "max_power_watts": 15
+    },
+    "raspberry_pi_5": {
+      "name": "Raspberry Pi 5 (ARM64)",
+      "architecture": "ARMv8-A Cortex-A76",
+      "memory_mib": 4096,
+      "cpu_cores": 4,
+      "cpu_speed_ghz": 2.4,
+      "gpu": "VideoCore VII",
+      "neon_support": true,
+      "supported_models": {
+        "asr": {
+          "model": "whisper-tiny-en",
+          "quantization": "INT8",
+          "runtime": "onnxruntime-arm",
+          "max_batch_size": 1,
+          "max_audio_seconds": 10,
+          "max_concurrent": 1,
+          "latency_p50_ms": 3000,
+          "latency_p95_ms": 8000
+        },
+        "tts": {
+          "model": "piper-tiny",
+          "quantization": "FP16",
+          "runtime": "onnxruntime-arm",
+          "max_batch_size": 1,
+          "max_concurrent": 1,
+          "latency_p50_ms": 2000
+        },
+        "llm": {
+          "model": "phi-3-mini-3.8b",
+          "quantization": "INT4_GPTQ",
+          "runtime": "llama.cpp",
+          "max_batch_size": 1,
+          "max_context_length": 2048,
+          "max_concurrent": 1,
+          "tokens_per_second": 3
+        },
+        "embedding": {
+          "model": "bge-micro-50m",
+          "quantization": "FP16",
+          "runtime": "onnxruntime-arm",
+          "max_batch_size": 1,
+          "embedding_dimension": 256
+        }
+      },
+      "storage_required_gb": 20,
+      "max_power_watts_via_usb": 27,
+      "notes": "CPU-only inference. Use llama.cpp for LLM. Use onnxruntime for other models. Limited to text-only interactions.",
+      "optional_hailo_ai_accelerator": {
+        "model": "Hailo-8L",
+        "tflops_int8": 13,
+        "supported": true
+      }
+    }
+  },
+  "device_detection": {
+    "method": "nvidia_smi",
+    "fallback_method": "lspci",
+    "raspberry_pi_detection": {
+      "method": "/proc/device-tree/model",
+      "expected_match": "Raspberry Pi 5"
+    },
+    "jetson_detection": {
+      "method": "/etc/nv_tegra_release"
+    }
+  },
+  "model_assignment_rules": {
+    "strategy": "best_fit",
+    "prioritize_local_inference": true,
+    "cpu_fallback_on_gpu_memory_pressure": true,
+    "dynamic_offloading": true,
+    "offloading_policy": {
+      "gpu_utilization_threshold_percent": 85,
+      "gpu_memory_threshold_percent": 90,
+      "offload_models_in_order": ["vision", "ner", "embedding", "tts", "asr"]
+    }
+  }
+}

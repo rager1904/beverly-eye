@@ -1,0 +1,48 @@
+'use client';
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api-client';
+import type { Appointment, PaginatedResponse } from '@/types';
+
+export function useAppointments(params?: { patientId?: string; providerId?: string; status?: string; date?: string; page?: number }) {
+  const queryParams = new URLSearchParams();
+  if (params?.patientId) queryParams.set('patient_id', params.patientId);
+  if (params?.providerId) queryParams.set('provider_id', params.providerId);
+  if (params?.status) queryParams.set('status', params.status);
+  if (params?.date) queryParams.set('date', params.date);
+  if (params?.page) queryParams.set('page', String(params.page));
+
+  return useQuery<PaginatedResponse<Appointment>>({
+    queryKey: ['appointments', params],
+    queryFn: () => api.get(`/appointments?${queryParams.toString()}`),
+  });
+}
+
+export function useAppointment(id: string) {
+  return useQuery<Appointment>({
+    queryKey: ['appointment', id],
+    queryFn: () => api.get(`/appointments/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useCreateAppointment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<Appointment>) => api.post('/appointments', data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['appointments'] }); },
+  });
+}
+
+export function useUpdateAppointmentStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => api.patch(`/appointments/${id}/status`, { status }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['appointments'] }); },
+  });
+}
+
+export function useTodayAppointments() {
+  const today = new Date().toISOString().split('T')[0];
+  return useAppointments({ date: today });
+}

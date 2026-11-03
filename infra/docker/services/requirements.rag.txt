@@ -1,0 +1,11 @@
+# RAG requirements — packages actually imported by rag/ code
+# (pydantic, httpx, asyncpg, redis, uvicorn are in base image)
+sentence-transformers>=2.2.0
+qdrant-client>=1.8.0
+weaviate-client>=3.25.0
+neo4j>=5.20.0
+pypdf>=3.17.0
+fastapi>=0.109.0
+sqlalchemy[asyncio]>=2.0
+aiofiles>=23.0
+beautifulsoup4>=4.12.0

@@ -1,0 +1,129 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-gateway-pdb
+  namespace: healthcare
+  labels:
+    app: api-gateway
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: emr-service-pdb
+  namespace: healthcare
+  labels:
+    app: emr-service
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: emr-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agent-orchestrator-pdb
+  namespace: healthcare
+  labels:
+    app: agent-orchestrator
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: agent-orchestrator
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: frontend-pdb
+  namespace: healthcare
+  labels:
+    app: frontend
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: frontend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: postgres-pdb
+  namespace: healthcare
+  labels:
+    app: postgres
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: postgres
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: healthcare
+  labels:
+    app: redis
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: redis
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: asr-service-pdb
+  namespace: healthcare
+  labels:
+    app: asr-service
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: asr-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tts-service-pdb
+  namespace: healthcare
+  labels:
+    app: tts-service
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: tts-service
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: disease-surveillance-pdb
+  namespace: healthcare
+  labels:
+    app: disease-surveillance
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: disease-surveillance
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: medical-imaging-pdb
+  namespace: healthcare
+  labels:
+    app: medical-imaging
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: medical-imaging

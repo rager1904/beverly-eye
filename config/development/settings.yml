@@ -1,0 +1,253 @@
+# =============================================================================
+# Development Configuration — UbuntuCare (Zambia)
+# =============================================================================
+
+version: "1.0"
+environment: development
+
+# ---------------------------------------------------------------------------
+# 1. Database — Local SQLite Fallback
+# ---------------------------------------------------------------------------
+database:
+  primary:
+    engine: sqlite
+    path: "${DEV_DATA_DIR}/ubuntucare_dev.db"
+    journal_mode: WAL
+    cache_size_mb: 32
+    synchronous: OFF
+    foreign_keys: true
+    debug_sql: true
+    pool_size: 5
+  vector:
+    engine: sqlite_vss
+    path: "${DEV_DATA_DIR}/vectors.db"
+    dimension: 384
+    index_type: hnsw
+  redis:
+    enabled: false
+    fallback_to_memory: true
+    mock_redis:
+      host: localhost
+      port: 16379
+  migrations:
+    auto_run: true
+    auto_seed: true
+    seed_test_data: true
+    force_reset_on_schema_change: true
+
+# ---------------------------------------------------------------------------
+# 2. Mock AI Models
+# ---------------------------------------------------------------------------
+ai:
+  provider: mock
+  mock_provider:
+    asr:
+      model: mock-whisper
+      latency_ms: 100
+      mock_transcript: "This is a mock transcription for development."
+      supported_languages: ["en", "bem", "nya"]
+    tts:
+      model: mock-piper
+      latency_ms: 50
+      mock_audio_format: wav
+    llm:
+      model: mock-qwen
+      latency_ms: 200
+      mock_responses:
+        consultation_note: "Mock consultation note for testing purposes."
+        diagnosis: "Mock diagnosis for development."
+        prescription: "Mock prescription for testing."
+      supported_languages: ["en", "bem", "nya"]
+    embedding:
+      model: mock-stella
+      latency_ms: 20
+      mock_dimension: 384
+    vision:
+      model: mock-vit
+      latency_ms: 100
+      mock_findings: "No significant abnormalities detected (mock)."
+  real_models_enabled: false
+  offline_mode: true
+
+# ---------------------------------------------------------------------------
+# 3. Debug Logging
+# ---------------------------------------------------------------------------
+logging:
+  level: DEBUG
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  date_format: "%Y-%m-%d %H:%M:%S"
+  handlers:
+    console:
+      enabled: true
+      level: DEBUG
+      colorize: true
+    file:
+      enabled: true
+      level: DEBUG
+      path: "${DEV_DATA_DIR}/logs/app.log"
+      max_bytes: 10485760
+      backup_count: 5
+      rotate: true
+    sqlalchemy:
+      enabled: true
+      level: DEBUG
+      echo_all_queries: true
+      log_parameters: true
+  third_party_logging:
+    uvicorn: INFO
+    sqlalchemy: DEBUG
+    httpx: INFO
+    redis: INFO
+    boto3: WARNING
+    aiobotocore: WARNING
+  structured_logging:
+    enabled: false
+    format: json
+  sensitive_data_masking:
+    enabled: true
+    patterns:
+      - "password"
+      - "secret"
+      - "token"
+      - "authorization"
+    mask_string: "****"
+
+# ---------------------------------------------------------------------------
+# 4. Hot Reload
+# ---------------------------------------------------------------------------
+hot_reload:
+  enabled: true
+  watch_dirs:
+    - "src"
+    - "api"
+    - "services"
+    - "config"
+  watch_patterns:
+    - "*.py"
+    - "*.yml"
+    - "*.yaml"
+    - "*.json"
+  ignore_patterns:
+    - "*.pyc"
+    - "__pycache__"
+    - ".git"
+    - "*.log"
+    - "data"
+  reload_delay_ms: 300
+  graceful_shutdown_timeout_seconds: 10
+  live_reload_server:
+    enabled: true
+    port: 35729
+
+# ---------------------------------------------------------------------------
+# 5. CORS Settings (Permissive for Development)
+# ---------------------------------------------------------------------------
+cors:
+  enabled: true
+  allow_origins:
+    - "*"
+  allow_methods:
+    - "*"
+  allow_headers:
+    - "*"
+  allow_credentials: true
+  expose_headers:
+    - "*"
+  max_age_seconds: 600
+
+# ---------------------------------------------------------------------------
+# 6. Server
+# ---------------------------------------------------------------------------
+server:
+  host: "0.0.0.0"
+  port: 8000
+  reload: true
+  workers: 1
+  timeout_keep_alive: 5
+  max_request_size_mb: 100
+  trust_proxy_headers: true
+  forwarded_allow_ips: "*"
+
+# ---------------------------------------------------------------------------
+# 7. Feature Flags (All Enabled for Dev)
+# ---------------------------------------------------------------------------
+feature_flags:
+  offline_mode: true
+  voice_assistant: true
+  multilingual_tts: true
+  ai_diagnosis_assist: true
+  drug_interaction_check: true
+  lab_result_interpretation: true
+  imaging_ai: true
+  smart_scheduling: true
+  inventory_forecast: true
+  telemedicine: true
+  dhis2_integration: true
+  smartcard_integration: false
+  mhealth_sms: true
+  analytics_dashboard: true
+  sync_engine: true
+  patient_portal: true
+  audit_trail: true
+
+# ---------------------------------------------------------------------------
+# 8. Authentication (Simplified for Dev)
+# ---------------------------------------------------------------------------
+auth:
+  provider: "local"
+  jwt_secret: "dev-secret-do-not-use-in-production-change-me-in-env"
+  jwt_algorithm: HS256
+  access_token_ttl_minutes: 1440
+  refresh_token_ttl_days: 30
+  bypass_auth_for_development: false
+  default_admin_user:
+    email: "admin@dev.ubuntucare.gov.zm"
+    password: "admin123"
+    name: "Development Admin"
+  test_users:
+    - email: "doctor@dev.test"
+      password: "doctor123"
+      role: "doctor"
+    - email: "nurse@dev.test"
+      password: "nurse123"
+      role: "nurse"
+    - email: "pharmacist@dev.test"
+      password: "pharmacist123"
+      role: "pharmacist"
+
+# ---------------------------------------------------------------------------
+# 9. External Services (Mocks)
+# ---------------------------------------------------------------------------
+external_services:
+  sms:
+    provider: mock
+  email:
+    provider: console
+  s3:
+    provider: local
+    endpoint_url: "http://localhost:9000"
+    bucket: "dev-ubuntucare"
+    access_key: "minioadmin"
+    secret_key: "minioadmin"
+    region: "us-east-1"
+  dhis2:
+    enabled: false
+    mock_response: true
+  africastalking:
+    enabled: false
+    mock_response: true
+  keycloak:
+    enabled: false
+  openhim:
+    enabled: false
+
+# ---------------------------------------------------------------------------
+# 10. Sync (Local-Only for Dev)
+# ---------------------------------------------------------------------------
+sync:
+  enabled: true
+  mode: "local_only"
+  simulate_offline: false
+  simulate_latency_ms: 0
+  simulate_bandwidth_bps: 0
+  queue_path: "${DEV_DATA_DIR}/sync_queue.db"

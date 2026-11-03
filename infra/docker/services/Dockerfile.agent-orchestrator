@@ -1,0 +1,47 @@
+# =============================================================================
+# UbuntuCare - AI Agent Orchestrator
+# Orchestrates multi-agent clinical workflows
+# Agents: triage, clinical-doc, patient-support, medical-research, etc.
+# =============================================================================
+ARG BASE_IMAGE_TAG=latest
+FROM ubuntucare-base/python:${BASE_IMAGE_TAG} AS builder
+
+LABEL service="agent-orchestrator"
+
+USER root
+
+# Agent-specific dependencies (LangChain, LLM frameworks)
+COPY infra/docker/services/requirements.agents.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Copy all agent modules
+COPY src/backend/agents/ /app/src/backend/agents/
+COPY src/backend/shared/ /app/src/backend/shared/
+COPY src/backend/core/ /app/src/backend/core/
+
+USER appuser
+
+FROM ubuntucare-base/python:${BASE_IMAGE_TAG}
+
+LABEL service="agent-orchestrator"
+
+USER root
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /app /app
+RUN chown -R appuser:appuser /app
+
+USER appuser
+WORKDIR /app
+
+EXPOSE 8002
+
+ENV SERVICE_NAME=agent-orchestrator
+ENV AGENT__CACHE_DIR=/data/agent-cache
+ENV AGENT__MODEL_DIR=/data/models
+
+VOLUME ["/data"]
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')" || exit 1
+
+ENTRYPOINT ["uvicorn", "src.backend.agents.service:app", "--host", "0.0.0.0", "--port", "8002", "--workers", "1", "--proxy-headers"]

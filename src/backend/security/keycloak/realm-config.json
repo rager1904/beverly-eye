@@ -1,0 +1,652 @@
+{
+  "realm": "ubuntucare",
+  "displayName": "UbuntuCare Zambia",
+  "displayNameHtml": "<div class=\"kc-logo-text\"><span>UbuntuCare Zambia</span></div>",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "registrationEmailAsUsername": false,
+  "rememberMe": true,
+  "verifyEmail": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "failureFactor": 5,
+  "passwordPolicy": "length(8) and digits(1) and lowerCase(1) and upperCase(1) and specialChars(1) and notUsername(undefined) and passwordHistory(5) and forceExpiredPasswordChange(90) and passwordExpire(PasswordExpire,365)",
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyInitialCounter": 0,
+  "otpPolicyDigits": 6,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyPeriod": 30,
+  "otpPolicyCodeReusable": false,
+  "otpSupportedApplications": ["FreeOTP", "Google Authenticator", "Microsoft Authenticator"],
+  "webAuthnPolicyRpEntityName": "UbuntuCare Zambia",
+  "webAuthnPolicySignatureAlgorithms": ["ES256"],
+  "webAuthnPolicyRpId": "ubuntucare.zm",
+  "webAuthnPolicyAttestationConveyancePreference": "not specified",
+  "webAuthnPolicyAuthenticatorAttachment": "platform",
+  "webAuthnPolicyRequireResidentKey": "not specified",
+  "webAuthnPolicyUserVerificationRequirement": "preferred",
+  "webAuthnPolicyCreateTimeout": 0,
+  "webAuthnPolicyAvoidSameAuthenticatorRegister": false,
+  "webAuthnPolicyAcceptableAaguids": [],
+  "smtpServer": {
+    "host": "localhost",
+    "port": 587,
+    "from": "noreply@ubuntucare.zm",
+    "fromDisplayName": "UbuntuCare Zambia",
+    "ssl": false,
+    "starttls": true
+  },
+  "browserSecurityHeaders": {
+    "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+    "xContentTypeOptions": "nosniff",
+    "xRobotsTag": "none",
+    "xFrameOptions": "SAMEORIGIN",
+    "xXSSProtection": "1; mode=block",
+    "strictTransportSecurity": "max-age=31536000; includeSubDomains"
+  },
+  "ssoSessionMaxLifespan": 28800,
+  "ssoSessionMaxLifespanRememberMe": 604800,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionIdleTimeoutRememberMe": 86400,
+  "accessTokenLifespan": 300,
+  "accessTokenLifespanForImplicitFlow": 900,
+  "accessCodeLifespan": 60,
+  "accessCodeLifespanUserAction": 300,
+  "accessCodeLifespanLogin": 1800,
+  "actionTokenGeneratedByAdminLifespan": 43200,
+  "actionTokenGeneratedByUserLifespan": 300,
+  "offlineSessionMaxLifespan": 5184000,
+  "offlineSessionIdleTimeout": 2592000,
+  "offlineSessionMaxLifespanEnabled": false,
+  "clientSessionMaxLifespan": 86400,
+  "clientOfflineSessionMaxLifespan": 5184000,
+  "clientOfflineSessionIdleTimeout": 2592000,
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Super administrator with full system access",
+        "composite": true,
+        "composites": {
+          "realm": ["doctor", "nurse", "pharmacist", "lab_technician", "public_health_officer"]
+        }
+      },
+      {
+        "name": "doctor",
+        "description": "Medical doctor - can access clinical records, prescribe, order tests"
+      },
+      {
+        "name": "nurse",
+        "description": "Nurse - can access patient records, administer meds, triage"
+      },
+      {
+        "name": "patient",
+        "description": "Patient - can view own health records and appointments"
+      },
+      {
+        "name": "pharmacist",
+        "description": "Pharmacist - can dispense medications, manage inventory"
+      },
+      {
+        "name": "lab_technician",
+        "description": "Lab technician - can process lab orders and enter results"
+      },
+      {
+        "name": "public_health_officer",
+        "description": "Public health officer - disease surveillance and reporting"
+      },
+      {
+        "name": "community_health_worker",
+        "description": "Community health worker - household visits and vaccinations"
+      },
+      {
+        "name": "ministry_official",
+        "description": "Ministry of Health official - aggregate data access for reporting"
+      }
+    ],
+    "client": {
+      "api-gateway": [
+        {
+          "name": "patient:read",
+          "description": "Read patient demographics and PHI"
+        },
+        {
+          "name": "patient:write",
+          "description": "Create and update patient records"
+        },
+        {
+          "name": "patient:admin",
+          "description": "Full administrative control over patient records"
+        },
+        {
+          "name": "encounter:read",
+          "description": "Read clinical encounters"
+        },
+        {
+          "name": "encounter:write",
+          "description": "Create and update encounters"
+        },
+        {
+          "name": "clinical_note:read",
+          "description": "Read clinical notes"
+        },
+        {
+          "name": "clinical_note:write",
+          "description": "Create and update clinical notes"
+        },
+        {
+          "name": "appointment:read",
+          "description": "View appointments"
+        },
+        {
+          "name": "appointment:write",
+          "description": "Create, update, cancel appointments"
+        },
+        {
+          "name": "lab:read",
+          "description": "View lab orders and results"
+        },
+        {
+          "name": "lab:write",
+          "description": "Create lab orders and enter results"
+        },
+        {
+          "name": "pharmacy:read",
+          "description": "View pharmacy inventory and prescriptions"
+        },
+        {
+          "name": "pharmacy:write",
+          "description": "Dispense medications and manage inventory"
+        },
+        {
+          "name": "telemedicine:read",
+          "description": "View telemedicine consultations"
+        },
+        {
+          "name": "telemedicine:write",
+          "description": "Conduct telemedicine consultations"
+        },
+        {
+          "name": "disease_surveillance:read",
+          "description": "View surveillance data"
+        },
+        {
+          "name": "disease_surveillance:write",
+          "description": "Report disease cases and outbreaks"
+        },
+        {
+          "name": "community_health:read",
+          "description": "View community health data"
+        },
+        {
+          "name": "community_health:write",
+          "description": "Record community health visits and interventions"
+        },
+        {
+          "name": "admin:*",
+          "description": "Super admin access to all resources"
+        },
+        {
+          "name": "ministry:read",
+          "description": "Ministry of Health aggregate data access"
+        }
+      ]
+    }
+  },
+  "groups": [
+    {
+      "name": "Ministry of Health",
+      "path": "/Ministry of Health",
+      "attributes": {
+        "type": ["national"]
+      },
+      "subGroups": [
+        {
+          "name": "Disease Surveillance",
+          "path": "/Ministry of Health/Disease Surveillance",
+          "attributes": {
+            "type": ["department"]
+          }
+        },
+        {
+          "name": "Pharmacy & Supply",
+          "path": "/Ministry of Health/Pharmacy & Supply",
+          "attributes": {
+            "type": ["department"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "University Teaching Hospital",
+      "path": "/University Teaching Hospital",
+      "attributes": {
+        "type": ["hospital"],
+        "hospital_id": ["placeholder-uth-uuid"],
+        "province": ["Lusaka"],
+        "level": ["tertiary"]
+      },
+      "subGroups": [
+        {"name": "doctors", "path": "/University Teaching Hospital/doctors"},
+        {"name": "nurses", "path": "/University Teaching Hospital/nurses"},
+        {"name": "pharmacy", "path": "/University Teaching Hospital/pharmacy"},
+        {"name": "lab", "path": "/University Teaching Hospital/lab"},
+        {"name": "administration", "path": "/University Teaching Hospital/administration"},
+        {"name": "community_health", "path": "/University Teaching Hospital/community_health"}
+      ]
+    },
+    {
+      "name": "Lusaka District Health Office",
+      "path": "/Lusaka District Health Office",
+      "attributes": {
+        "type": ["district_health"],
+        "province": ["Lusaka"]
+      },
+      "subGroups": [
+        {"name": "doctors", "path": "/Lusaka District Health Office/doctors"},
+        {"name": "nurses", "path": "/Lusaka District Health Office/nurses"},
+        {"name": "community_health", "path": "/Lusaka District Health Office/community_health"},
+        {"name": "administration", "path": "/Lusaka District Health Office/administration"}
+      ]
+    },
+    {
+      "name": "Ndola Teaching Hospital",
+      "path": "/Ndola Teaching Hospital",
+      "attributes": {
+        "type": ["hospital"],
+        "province": ["Copperbelt"],
+        "level": ["tertiary"]
+      },
+      "subGroups": [
+        {"name": "doctors", "path": "/Ndola Teaching Hospital/doctors"},
+        {"name": "nurses", "path": "/Ndola Teaching Hospital/nurses"},
+        {"name": "pharmacy", "path": "/Ndola Teaching Hospital/pharmacy"},
+        {"name": "lab", "path": "/Ndola Teaching Hospital/lab"},
+        {"name": "administration", "path": "/Ndola Teaching Hospital/administration"}
+      ]
+    },
+    {
+      "name": "Livingstone Central Hospital",
+      "path": "/Livingstone Central Hospital",
+      "attributes": {
+        "type": ["hospital"],
+        "province": ["Southern"],
+        "level": ["tertiary"]
+      },
+      "subGroups": [
+        {"name": "doctors", "path": "/Livingstone Central Hospital/doctors"},
+        {"name": "nurses", "path": "/Livingstone Central Hospital/nurses"},
+        {"name": "pharmacy", "path": "/Livingstone Central Hospital/pharmacy"},
+        {"name": "lab", "path": "/Livingstone Central Hospital/lab"},
+        {"name": "administration", "path": "/Livingstone Central Hospital/administration"}
+      ]
+    },
+    {
+      "name": "Chipata General Hospital",
+      "path": "/Chipata General Hospital",
+      "attributes": {
+        "type": ["hospital"],
+        "province": ["Eastern"],
+        "level": ["secondary"]
+      },
+      "subGroups": [
+        {"name": "doctors", "path": "/Chipata General Hospital/doctors"},
+        {"name": "nurses", "path": "/Chipata General Hospital/nurses"},
+        {"name": "pharmacy", "path": "/Chipata General Hospital/pharmacy"},
+        {"name": "lab", "path": "/Chipata General Hospital/lab"},
+        {"name": "administration", "path": "/Chipata General Hospital/administration"}
+      ]
+    },
+    {
+      "name": "Kasama General Hospital",
+      "path": "/Kasama General Hospital",
+      "attributes": {
+        "type": ["hospital"],
+        "province": ["Northern"],
+        "level": ["secondary"]
+      },
+      "subGroups": [
+        {"name": "doctors", "path": "/Kasama General Hospital/doctors"},
+        {"name": "nurses", "path": "/Kasama General Hospital/nurses"},
+        {"name": "pharmacy", "path": "/Kasama General Hospital/pharmacy"},
+        {"name": "lab", "path": "/Kasama General Hospital/lab"},
+        {"name": "administration", "path": "/Kasama General Hospital/administration"}
+      ]
+    },
+    {
+      "name": "Mongu General Hospital",
+      "path": "/Mongu General Hospital",
+      "attributes": {
+        "type": ["hospital"],
+        "province": ["Western"],
+        "level": ["secondary"]
+      },
+      "subGroups": [
+        {"name": "doctors", "path": "/Mongu General Hospital/doctors"},
+        {"name": "nurses", "path": "/Mongu General Hospital/nurses"},
+        {"name": "pharmacy", "path": "/Mongu General Hospital/pharmacy"},
+        {"name": "lab", "path": "/Mongu General Hospital/lab"},
+        {"name": "administration", "path": "/Mongu General Hospital/administration"}
+      ]
+    },
+    {
+      "name": "Mwansabombwe District Hospital",
+      "path": "/Mwansabombwe District Hospital",
+      "attributes": {
+        "type": ["hospital"],
+        "province": ["Luapula"],
+        "level": ["primary"]
+      },
+      "subGroups": [
+        {"name": "doctors", "path": "/Mwansabombwe District Hospital/doctors"},
+        {"name": "nurses", "path": "/Mwansabombwe District Hospital/nurses"},
+        {"name": "pharmacy", "path": "/Mwansabombwe District Hospital/pharmacy"},
+        {"name": "lab", "path": "/Mwansabombwe District Hospital/lab"},
+        {"name": "administration", "path": "/Mwansabombwe District Hospital/administration"}
+      ]
+    },
+    {
+      "name": "Solwezi General Hospital",
+      "path": "/Solwezi General Hospital",
+      "attributes": {
+        "type": ["hospital"],
+        "province": ["North-Western"],
+        "level": ["secondary"]
+      },
+      "subGroups": [
+        {"name": "doctors", "path": "/Solwezi General Hospital/doctors"},
+        {"name": "nurses", "path": "/Solwezi General Hospital/nurses"},
+        {"name": "pharmacy", "path": "/Solwezi General Hospital/pharmacy"},
+        {"name": "lab", "path": "/Solwezi General Hospital/lab"},
+        {"name": "administration", "path": "/Solwezi General Hospital/administration"}
+      ]
+    },
+    {
+      "name": "Chinsali General Hospital",
+      "path": "/Chinsali General Hospital",
+      "attributes": {
+        "type": ["hospital"],
+        "province": ["Muchinga"],
+        "level": ["secondary"]
+      },
+      "subGroups": [
+        {"name": "doctors", "path": "/Chinsali General Hospital/doctors"},
+        {"name": "nurses", "path": "/Chinsali General Hospital/nurses"},
+        {"name": "pharmacy", "path": "/Chinsali General Hospital/pharmacy"},
+        {"name": "lab", "path": "/Chinsali General Hospital/lab"},
+        {"name": "administration", "path": "/Chinsali General Hospital/administration"}
+      ]
+    }
+  ],
+  "defaultRoles": ["patient"],
+  "requiredCredentials": ["password"],
+  "otpPolicyType": "totp",
+  "authenticationFlows": [
+    {
+      "alias": "browser with MFA",
+      "description": "Browser-based authentication with optional MFA",
+      "providerId": "basic-flow",
+      "topLevel": true,
+      "builtIn": false,
+      "authenticationExecutions": [
+        {
+          "authenticator": "auth-cookie",
+          "requirement": "ALTERNATIVE",
+          "priority": 0,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        },
+        {
+          "authenticator": "auth-username-password-form",
+          "requirement": "REQUIRED",
+          "priority": 10,
+          "userSetupAllowed": false,
+          "autheticatorFlow": false
+        },
+        {
+          "authenticatorFlow": true,
+          "requirement": "CONDITIONAL",
+          "priority": 20,
+          "userSetupAllowed": false,
+          "autheticatorFlow": true,
+          "flowAlias": "MFA conditional flow",
+          "authenticationExecutions": [
+            {
+              "authenticator": "condition-user-configured",
+              "requirement": "REQUIRED",
+              "priority": 0,
+              "userSetupAllowed": false,
+              "autheticatorFlow": false
+            },
+            {
+              "authenticator": "auth-otp-form",
+              "requirement": "REQUIRED",
+              "priority": 10,
+              "userSetupAllowed": false,
+              "autheticatorFlow": false
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "authenticatorConfig": [
+    {
+      "alias": "mfa-conditional",
+      "config": {
+        "conditionUserConfigured": "required"
+      }
+    }
+  ],
+  "requiredActions": [
+    {
+      "alias": "CONFIGURE_TOTP",
+      "name": "Configure OTP",
+      "providerId": "CONFIGURE_TOTP",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 10,
+      "config": {}
+    },
+    {
+      "alias": "VERIFY_EMAIL",
+      "name": "Verify Email",
+      "providerId": "VERIFY_EMAIL",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 20,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PASSWORD",
+      "name": "Update Password",
+      "providerId": "UPDATE_PASSWORD",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 30,
+      "config": {}
+    },
+    {
+      "alias": "UPDATE_PROFILE",
+      "name": "Update Profile",
+      "providerId": "UPDATE_PROFILE",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 40,
+      "config": {}
+    },
+    {
+      "alias": "TERMS_AND_CONDITIONS",
+      "name": "Terms and Conditions",
+      "providerId": "TERMS_AND_CONDITIONS",
+      "enabled": true,
+      "defaultAction": false,
+      "priority": 50,
+      "config": {}
+    }
+  ],
+  "identityProviders": [],
+  "identityProviderMappers": [],
+  "protocolMappers": [
+    {
+      "name": "hospital_id",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.attribute": "hospital_id",
+        "claim.name": "hospital_id",
+        "claim.value": "",
+        "jsonType.label": "String",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "userinfo.token.claim": "true"
+      }
+    },
+    {
+      "name": "mfa_enabled",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper",
+      "consentRequired": false,
+      "config": {
+        "user.attribute": "mfa_enabled",
+        "claim.name": "mfa_enabled",
+        "claim.value": "",
+        "jsonType.label": "boolean",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "userinfo.token.claim": "true"
+      }
+    },
+    {
+      "name": "full name",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-full-name-mapper",
+      "consentRequired": false,
+      "config": {
+        "id.token.claim": "true",
+        "access.token.claim": "true"
+      }
+    },
+    {
+      "name": "groups",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-group-membership-mapper",
+      "consentRequired": false,
+      "config": {
+        "full.path": "true",
+        "id.token.claim": "true",
+        "access.token.claim": "true",
+        "claim.name": "groups",
+        "userinfo.token.claim": "true"
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "api-gateway",
+      "name": "UbuntuCare API Gateway",
+      "description": "Backend API client for UbuntuCare Zambia",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "**********",
+      "redirectUris": ["http://localhost:8000/*", "https://api.ubuntucare.zm/*"],
+      "webOrigins": ["http://localhost:3000", "https://app.ubuntucare.zm"],
+      "publicClient": false,
+      "frontchannelLogout": true,
+      "protocol": "openid-connect",
+      "attributes": {
+        "access.token.lifespan": "300",
+        "client.secret.creation.time": "0",
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      },
+      "fullScopeAllowed": false,
+      "defaultClientScopes": ["web-origins", "roles", "profile", "email"],
+      "optionalClientScopes": ["address", "phone", "offline_access"]
+    },
+    {
+      "clientId": "frontend",
+      "name": "UbuntuCare Frontend",
+      "description": "React web application frontend",
+      "enabled": true,
+      "publicClient": true,
+      "redirectUris": ["http://localhost:3000/*", "https://app.ubuntucare.zm/*"],
+      "webOrigins": ["http://localhost:3000", "https://app.ubuntucare.zm"],
+      "protocol": "openid-connect",
+      "fullScopeAllowed": true,
+      "defaultClientScopes": ["web-origins", "roles", "profile", "email"],
+      "optionalClientScopes": ["address", "phone", "offline_access"]
+    },
+    {
+      "clientId": "ubuntucare-mobile",
+      "name": "UbuntuCare Mobile",
+      "description": "Mobile application for CHWs and field workers",
+      "enabled": true,
+      "publicClient": true,
+      "redirectUris": ["ubuntucare://callback", "http://localhost:8081/*"],
+      "protocol": "openid-connect",
+      "fullScopeAllowed": true,
+      "defaultClientScopes": ["web-origins", "roles", "profile", "email", "offline_access"],
+      "optionalClientScopes": ["address", "phone"]
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "roles",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "true",
+        "consent.screen.text": "User roles and permissions"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "user.attribute": "foo",
+            "claim.name": "realm_access.roles",
+            "access.token.claim": "true",
+            "id.token.claim": "true"
+          }
+        },
+        {
+          "name": "client roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "config": {
+            "multivalued": "true",
+            "user.attribute": "foo",
+            "claim.name": "resource_access.${client_id}.roles",
+            "access.token.claim": "true",
+            "id.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "internationalizationEnabled": true,
+  "supportedLocales": ["en", "ny", "bem", "sn"],
+  "defaultLocale": "en",
+  "eventsEnabled": true,
+  "eventsListeners": ["jboss-logging", "event-queue"],
+  "enabledEventTypes": [
+    "LOGIN", "LOGOUT", "REGISTER", "UPDATE_PROFILE", "UPDATE_PASSWORD",
+    "VERIFY_EMAIL", "SEND_VERIFY_EMAIL", "SEND_RESET_PASSWORD",
+    "EXECUTE_ACTIONS", "REVOKE_GRANT", "LOGIN_ERROR", "REGISTER_ERROR"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true
+}

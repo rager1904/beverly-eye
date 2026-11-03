@@ -1,0 +1,242 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: tts-service
+  namespace: healthcare
+  labels:
+    app: tts-service
+    service-type: gpu-inference
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app: tts-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tts-service
+  namespace: healthcare
+  labels:
+    app: tts-service
+    service-type: gpu-inference
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: tts-service
+  template:
+    metadata:
+      labels:
+        app: tts-service
+        service-type: gpu-inference
+      annotations:
+        prometheus.io/scrape:"true"
+        prometheus.io/port:"9090"
+        prometheus.io/path:"/metrics"
+        nvidia.com/gpu:"1"
+    spec:
+      serviceAccountName: tts-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1005
+        fsGroup: 1005
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: tts-service
+          image: ubuntucare/tts-service:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: MODEL_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: TTS_MODEL_NAME
+            - name: MODEL_DEVICE
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: TTS_MODEL_DEVICE
+            - name: SAMPLE_RATE
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: TTS_SAMPLE_RATE
+            - name: DEFAULT_VOICE
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: TTS_DEFAULT_VOICE
+            - name: SUPPORTED_LANGUAGES
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: TTS_SUPPORTED_LANGUAGES
+            - name: MINIO_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: MINIO_HOST
+            - name: MINIO_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: MINIO_PORT
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: MINIO_ROOT_PASSWORD
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: LOG_LEVEL
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+          resources:
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+              nvidia.com/gpu:"1"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+              nvidia.com/gpu:"1"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 90
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /startup
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              subPath: tts-models
+            - name: tmp
+              mountPath: /tmp
+            - name: dshm
+              mountPath: /dev/shm
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: model-storage
+        - name: tmp
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "4Gi"
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+        - key: gpu-type
+          operator: Equal
+          value: inference
+          effect: NoSchedule
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nvidia.com/gpu.present
+                    operator: Exists
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - tts-service
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tts-service-hpa
+  namespace: healthcare
+  labels:
+    app: tts-service
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tts-service
+  minReplicas: 1
+  maxReplicas: 2
+  metrics:
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 300
+    scaleDown:
+      stabilizationWindowSeconds: 900
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 600

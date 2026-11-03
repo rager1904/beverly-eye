@@ -1,0 +1,113 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [develop]
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version or branch to deploy"
+        required: false
+        type: string
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: af-south-1
+  EKS_CLUSTER: zambia-health-staging
+  REGISTRY: ghcr.io
+  IMAGE_TAG: ${{ github.event.inputs.version || github.sha }}
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging EKS
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_STAGING_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: "v1.30.0"
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+
+      - name: Run database migrations
+        uses: ./.github/actions/run-migrations
+        with:
+          database-url: ${{ secrets.STAGING_DATABASE_URL }}
+          migration-path: ./migrations
+          timeout: 120
+
+      - name: Deploy to staging
+        uses: ./.github/actions/deploy-k8s
+        with:
+          cluster-type: eks
+          namespace: staging
+          manifest-dir: ./k8s/staging
+          image-tag: ${{ env.IMAGE_TAG }}
+          registry: ${{ env.REGISTRY }}
+          canary: false
+          health-check-endpoint: https://api.staging.zambia-health.example.com/health
+          health-check-timeout: 120
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment -n staging --timeout=300s
+
+      - name: Run smoke tests
+        run: |
+          pip install pytest requests
+          pytest tests/smoke/ \
+            --base-url=https://api.staging.zambia-health.example.com \
+            --junitxml=test-results/smoke.xml \
+            -v
+
+      - name: Clean up old resources
+        run: |
+          kubectl delete pod -n staging --field-selector status.phase=Succeeded --ignore-not-found
+          kubectl delete pod -n staging --field-selector status.phase=Failed --ignore-not-found
+
+  notify:
+    name: Notify Team
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: always()
+    steps:
+      - name: Send notification
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          payload: |
+            {
+              "channel": "#deployments",
+              "username": "Zambia Health Bot",
+              "attachments": [
+                {
+                  "color": "${{ job.status == 'success' && 'good' || 'danger' }}",
+                  "title": "Staging Deploy ${{ job.status }}",
+                  "fields": [
+                    { "title": "Version", "value": "${{ env.IMAGE_TAG }}", "short": true },
+                    { "title": "Status", "value": "${{ job.status }}", "short": true },
+                    { "title": "Branch", "value": "${{ github.ref_name }}", "short": true }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEPLOY_WEBHOOK || '' }}

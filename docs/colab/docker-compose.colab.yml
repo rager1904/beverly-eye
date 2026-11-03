@@ -1,0 +1,9 @@
+# Small safety/behavior overrides for the interactive Colab demo.
+# Invoke after the repository's base docker-compose.yml.
+services:
+  keycloak-setup:
+    environment:
+      # The setup script normally writes its generated environment values to
+      # its project .env. Keep Colab's ephemeral credentials out of the source
+      # checkout and the bind-mounted scripts directory.
+      ENV_FILE: /tmp/ubuntucare-colab-keycloak.env

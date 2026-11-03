@@ -1,0 +1,281 @@
+# =============================================================================
+# Prometheus Alert Rules — UbuntuCare (Zambia)
+# =============================================================================
+
+groups:
+  - name: ubuntucare_infrastructure
+    interval: 30s
+    rules:
+      # ── Server / Instance Down ──────────────────────────────────────────
+      - alert: InstanceDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Instance {{ $labels.instance }} is down"
+          description: "{{ $labels.instance }} has been unreachable for more than 2 minutes."
+          runbook_url: "https://wiki.ubuntucare.gov.zm/runbooks/instance-down"
+
+      # ── High CPU Usage ──────────────────────────────────────────────────
+      - alert: HighCpuUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 85% (current: {{ $value }}%)"
+
+      - alert: CriticalCpuUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is above 95% (current: {{ $value }}%)"
+
+      # ── High Memory Usage ───────────────────────────────────────────────
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 85% (current: {{ $value | humanizePercentage }})"
+
+      - alert: CriticalMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory usage on {{ $labels.instance }}"
+          description: "Memory usage is above 95% (current: {{ $value | humanizePercentage }})"
+
+      # ── Disk Space ──────────────────────────────────────────────────────
+      - alert: DiskSpaceWarning
+        expr: (node_filesystem_avail_bytes{mountpoint="/data"} / node_filesystem_size_bytes{mountpoint="/data"}) * 100 < 25
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk on /data has less than 25% free ({{ $value | humanizePercentage }} available)"
+
+      - alert: DiskSpaceCritical
+        expr: (node_filesystem_avail_bytes{mountpoint="/data"} / node_filesystem_size_bytes{mountpoint="/data"}) * 100 < 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical disk space on {{ $labels.instance }}"
+          description: "Disk on /data has less than 10% free"
+
+      # ── GPU Monitoring ──────────────────────────────────────────────────
+      - alert: HighGpuTemperature
+        expr: nvidia_gpu_temperature_celsius > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High GPU temperature ({{ $labels.gpu }})"
+          description: "GPU {{ $labels.gpu }} temperature is {{ $value }}°C"
+
+      - alert: CriticalGpuTemperature
+        expr: nvidia_gpu_temperature_celsius > 90
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical GPU temperature ({{ $labels.gpu }})"
+          description: "GPU {{ $labels.gpu }} temperature is {{ $value }}°C"
+
+      - alert: GpuMemoryPressure
+        expr: (nvidia_gpu_memory_used_bytes / nvidia_gpu_memory_total_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GPU memory pressure ({{ $labels.gpu }})"
+          description: "GPU memory usage is {{ $value | humanizePercentage }}"
+
+      # ── Database ─────────────────────────────────────────────────────────
+      - alert: PostgresqlDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down on {{ $labels.instance }}"
+          description: "PostgreSQL instance {{ $labels.instance }} is not responding."
+
+      - alert: PostgresqlReplicationLag
+        expr: pg_replication_lag_bytes > 104857600
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL replication lag ({{ $labels.instance }})"
+          description: "Replication lag is {{ $value | humanize1024 }}B"
+
+      - alert: PostgresqlConnectionPoolExhausted
+        expr: pg_stat_database_numbackends > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connection pool nearly exhausted"
+          description: "{{ $value }} connections active on {{ $labels.instance }}"
+
+      # ── Application ─────────────────────────────────────────────────────
+      - alert: HighApiLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API latency on {{ $labels.instance }}"
+          description: "P95 API latency is {{ $value }}s (threshold: 2s)"
+
+      - alert: HighApiErrorRate
+        expr: (sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))) * 100 > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High API error rate ({{ $labels.instance }})"
+          description: "5xx error rate is {{ $value }}% (threshold: 5%)"
+
+      - alert: HighApiRequestRate
+        expr: sum(rate(http_requests_total[1m])) > 1000
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High API request rate"
+          description: "Request rate: {{ $value }} req/s"
+
+      # ── Sync Agent ──────────────────────────────────────────────────────
+      - alert: SyncQueueBacklog
+        expr: sync_queue_pending_count > 10000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sync queue backlog ({{ $labels.device }})"
+          description: "{{ $value }} pending sync items on {{ $labels.device }}"
+
+      - alert: SyncQueueCriticalBacklog
+        expr: sync_queue_pending_count > 50000
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical sync queue backlog ({{ $labels.device }})"
+          description: "{{ $value }} pending sync items on {{ $labels.device }}"
+
+      - alert: SyncAgentOffline
+        expr: time() - sync_agent_last_sync_timestamp > 7200
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sync agent offline ({{ $labels.device }})"
+          description: "Device {{ $labels.device }} hasn't synced in >2 hours"
+
+      - alert: SyncAgentCriticalOffline
+        expr: time() - sync_agent_last_sync_timestamp > 86400
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "Sync agent critical offline ({{ $labels.device }})"
+          description: "Device {{ $labels.device }} hasn't synced in >24 hours"
+
+      - alert: SyncErrorRateHigh
+        expr: rate(sync_queue_failed_count[15m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High sync error rate ({{ $labels.device }})"
+          description: "{{ $value }} errors/min on {{ $labels.device }}"
+
+      # ── Model Serving ────────────────────────────────────────────────────
+      - alert: ModelInferenceLatencyHigh
+        expr: histogram_quantile(0.95, rate(model_inference_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High model inference latency ({{ $labels.model }})"
+          description: "P95 inference latency for {{ $labels.model }} is {{ $value }}s"
+
+      - alert: ModelReloadFailures
+        expr: increase(model_reload_failures_total[1h]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Model reload failures ({{ $labels.model }})"
+          description: "{{ $value }} reload failures for {{ $labels.model }} in the last hour"
+
+      - alert: ModelPredictionDrift
+        expr: model_prediction_drift_score > 0.25
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Model prediction drift detected ({{ $labels.model }})"
+          description: "Drift score: {{ $value }} for {{ $labels.model }}"
+
+      # ── Rate Limiting ───────────────────────────────────────────────────
+      - alert: RateLimitThresholdReached
+        expr: rate(http_requests_ratelimited_total[5m]) > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Rate limiting threshold reached"
+          description: "{{ $value }} requests/sec are being rate-limited"
+
+      # ── Backup ───────────────────────────────────────────────────────────
+      - alert: BackupNotRecent
+        expr: time() - backup_last_success_timestamp > 86400
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backup not recent"
+          description: "Last successful backup was over 24 hours ago"
+
+      - alert: BackupFailed
+        expr: increase(backup_failures_total[24h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backup failed"
+          description: "Backup operation failed on {{ $labels.instance }}"
+
+      # ── Offline / Edge Health ────────────────────────────────────────────
+      - alert: EdgeDeviceDisconnected
+        expr: time() - edge_device_last_seen > 3600
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Edge device disconnected ({{ $labels.device }})"
+          description: "Device {{ $labels.device }} last seen {{ $value | humanizeDuration }} ago"
+
+      - alert: EdgeDeviceBatteryCritical
+        expr: edge_device_battery_percent < 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Edge device battery critical ({{ $labels.device }})"
+          description: "Device {{ $labels.device }} battery at {{ $value }}%"

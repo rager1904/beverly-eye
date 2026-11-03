@@ -1,0 +1,249 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: asr-service
+  namespace: healthcare
+  labels:
+    app: asr-service
+    service-type: gpu-inference
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app: asr-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: asr-service
+  namespace: healthcare
+  labels:
+    app: asr-service
+    service-type: gpu-inference
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: asr-service
+  template:
+    metadata:
+      labels:
+        app: asr-service
+        service-type: gpu-inference
+      annotations:
+        prometheus.io/scrape:"true"
+        prometheus.io/port:"9090"
+        prometheus.io/path:"/metrics"
+        nvidia.com/gpu:"1"
+    spec:
+      serviceAccountName: asr-service
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1004
+        fsGroup: 1004
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: asr-service
+          image: ubuntucare/asr-service:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+            - name: metrics
+              containerPort: 9090
+              protocol: TCP
+          env:
+            - name: MODEL_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: ASR_MODEL_NAME
+            - name: MODEL_DEVICE
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: ASR_MODEL_DEVICE
+            - name: SAMPLE_RATE
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: ASR_SAMPLE_RATE
+            - name: LANGUAGE
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: ASR_LANGUAGE
+            - name: BEAM_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: ASR_BEAM_SIZE
+            - name: MINIO_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: MINIO_HOST
+            - name: MINIO_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: MINIO_PORT
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: MINIO_ROOT_USER
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: minio-credentials
+                  key: MINIO_ROOT_PASSWORD
+            - name: LOG_LEVEL
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: LOG_LEVEL
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: healthcare-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+          resources:
+            requests:
+              cpu: "2"
+              memory: "8Gi"
+              nvidia.com/gpu:"1"
+            limits:
+              cpu: "4"
+              memory: "16Gi"
+              nvidia.com/gpu:"1"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8000
+            initialDelaySeconds: 120
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /startup
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 60
+          volumeMounts:
+            - name: models
+              mountPath: /models
+              subPath: asr-models
+            - name: tmp
+              mountPath: /tmp
+            - name: dshm
+              mountPath: /dev/shm
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: model-storage
+        - name: tmp
+          emptyDir: {}
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: "8Gi"
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+        - key: gpu-type
+          operator: Equal
+          value: inference
+          effect: NoSchedule
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nvidia.com/gpu.present
+                    operator: Exists
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - asr-service
+                topologyKey: kubernetes.io/hostname
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: asr-service-hpa
+  namespace: healthcare
+  labels:
+    app: asr-service
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: asr-service
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 75
+    - type: Pods
+      pods:
+        metric:
+          name: gpu_memory_utilization
+        target:
+          type: AverageValue
+          averageValue: "80"
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 300
+    scaleDown:
+      stabilizationWindowSeconds: 900
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 600

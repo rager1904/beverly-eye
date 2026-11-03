@@ -1,0 +1,112 @@
+# =============================================================================
+# UbuntuCare - Base Python 3.11 Image (Zambia/Africa Deployment)
+# Pure open-source stack - no proprietary dependencies
+# =============================================================================
+ARG CUDA_VERSION=12.1.1
+ARG OS_VERSION=ubuntu22.04
+ARG PYTHON_VERSION=3.11
+
+FROM python:${PYTHON_VERSION}-slim AS base
+
+LABEL org.opencontainers.image.title="UbuntuCare Base Python"
+LABEL org.opencontainers.image.description="Base image for UbuntuCare Health Platform microservices"
+LABEL org.opencontainers.image.vendor="UbuntuCare Health"
+LABEL org.opencontainers.image.version="1.0.0"
+
+# --------------- System packages ---------------
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
+        # Build essentials
+        build-essential \
+        gcc \
+        g++ \
+        make \
+        cmake \
+        pkg-config \
+        # Audio / TTS
+        ffmpeg \
+        libsndfile1 \
+        libsndfile1-dev \
+        espeak-ng \
+        libespeak-ng-dev \
+        # Speech / ASR
+        sox \
+        libsox-dev \
+        flac \
+        # Utilities
+        curl \
+        wget \
+        git \
+        ca-certificates \
+        gnupg \
+        unzip \
+        zip \
+        # Database clients
+        postgresql-client \
+        redis-tools \
+        # Networking
+        netcat-openbsd \
+        dnsutils \
+        iputils-ping \
+        # Health
+        procps \
+        htop \
+        # Security
+        openssl \
+        # Locales
+        locales \
+        && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Locale for en-ZM (Zambia)
+RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+    echo "en_ZM.UTF-8 UTF-8" >> /etc/locale.gen && \
+    locale-gen en_US.UTF-8 en_ZM.UTF-8
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
+
+# --------------- Python packages ---------------
+COPY infra/docker/base/requirements.base.txt /tmp/requirements.base.txt
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r /tmp/requirements.base.txt
+
+# --------------- User ---------------
+RUN groupadd -g 1000 appuser && \
+    useradd -m -u 1000 -g appuser -s /bin/bash appuser
+RUN mkdir -p /app && chown -R appuser:appuser /app
+WORKDIR /app
+
+# --------------- Health check ---------------
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)" || exit 1
+
+USER appuser
+
+# --------------- CUDA runtime (optional) ---------------
+FROM base AS with-cuda
+
+ARG CUDA_VERSION
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        cuda-toolkit-12-1 \
+        libcudnn8 \
+        libcudnn8-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PATH=/usr/local/cuda/bin:${PATH}
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+ENV CUDA_HOME=/usr/local/cuda
+RUN echo "CUDA enabled (via apt, no NVIDIA base image dependency)"
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD python -c "import torch; assert torch.cuda.is_available(); print(f'GPU: {torch.cuda.get_device_name(0)}')" || exit 1
+
+FROM base AS final

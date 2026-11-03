@@ -1,0 +1,439 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: api-gateway-monitor
+  namespace: healthcare
+  labels:
+    app: api-gateway
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: api-gateway
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: emr-service-monitor
+  namespace: healthcare
+  labels:
+    app: emr-service
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: emr-service
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: agent-orchestrator-monitor
+  namespace: healthcare
+  labels:
+    app: agent-orchestrator
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: agent-orchestrator
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: asr-service-monitor
+  namespace: healthcare
+  labels:
+    app: asr-service
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: asr-service
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: tts-service-monitor
+  namespace: healthcare
+  labels:
+    app: tts-service
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: tts-service
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: rag-service-monitor
+  namespace: healthcare
+  labels:
+    app: rag-service
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: rag-service
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: frontend-monitor
+  namespace: healthcare
+  labels:
+    app: frontend
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: celery-worker-monitor
+  namespace: healthcare
+  labels:
+    app: celery-worker
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: celery-worker
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: celery-beat-monitor
+  namespace: healthcare
+  labels:
+    app: celery-beat
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: celery-beat
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: disease-surveillance-monitor
+  namespace: healthcare
+  labels:
+    app: disease-surveillance
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: disease-surveillance
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: community-health-monitor
+  namespace: healthcare
+  labels:
+    app: community-health
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: community-health
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: medical-imaging-monitor
+  namespace: healthcare
+  labels:
+    app: medical-imaging
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: medical-imaging
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: drug-supply-chain-monitor
+  namespace: healthcare
+  labels:
+    app: drug-supply-chain
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: drug-supply-chain
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: notifications-monitor
+  namespace: healthcare
+  labels:
+    app: notifications
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: notifications
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgres-monitor
+  namespace: healthcare
+  labels:
+    app: postgres
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: postgres
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: redis-monitor
+  namespace: healthcare
+  labels:
+    app: redis
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: redis
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: minio-monitor
+  namespace: healthcare
+  labels:
+    app: minio
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: minio
+  endpoints:
+    - port: api
+      interval: 15s
+      path: /minio/v2/metrics/cluster
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: qdrant-monitor
+  namespace: healthcare
+  labels:
+    app: qdrant
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: qdrant
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: weaviate-monitor
+  namespace: healthcare
+  labels:
+    app: weaviate
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: weaviate
+  endpoints:
+    - port: http
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: prometheus-monitor
+  namespace: healthcare
+  labels:
+    app: prometheus
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: prometheus
+  endpoints:
+    - port: http
+      interval: 15s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: grafana-monitor
+  namespace: healthcare
+  labels:
+    app: grafana
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: grafana
+  endpoints:
+    - port: http
+      interval: 30s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: alertmanager-monitor
+  namespace: healthcare
+  labels:
+    app: alertmanager
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: alertmanager
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+  namespaceSelector:
+    matchNames:
+      - healthcare

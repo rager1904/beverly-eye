@@ -1,0 +1,8 @@
+# TTS - lightweight dev stack (no Coqui XTTS-v2)
+edge-tts>=6.1.0
+gTTS>=2.3.0
+soundfile>=0.12.1
+librosa>=0.10.0
+numpy>=1.24.0
+fastapi>=0.109.0
+python-multipart>=0.0.6

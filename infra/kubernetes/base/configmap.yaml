@@ -1,0 +1,199 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: healthcare-config
+  namespace: healthcare
+  labels:
+    app: healthcare-config
+data:
+  # Database URLs
+  POSTGRES_HOST: "postgres-headless.healthcare.svc.cluster.local"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "healthcare"
+  POSTGRES_POOL_MIN: "2"
+  POSTGRES_POOL_MAX: "20"
+  POSTGRES_SSL_MODE: "require"
+  REDIS_HOST: "redis-headless.healthcare.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
+  REDIS_CELERY_DB: "1"
+  REDIS_CACHE_DB: "2"
+  REDIS_SESSION_DB: "3"
+  REDIS_RATE_LIMIT_DB: "4"
+
+  # Vector Store URLs
+  QDRANT_HOST: "qdrant-headless.healthcare.svc.cluster.local"
+  QDRANT_GRPC_PORT: "6334"
+  QDRANT_HTTP_PORT: "6333"
+  WEAVIATE_HOST: "weaviate-headless.healthcare.svc.cluster.local"
+  WEAVIATE_PORT: "8080"
+  WEAVIATE_GRPC_PORT: "50051"
+
+  # Object Storage
+  MINIO_HOST: "minio-headless.healthcare.svc.cluster.local"
+  MINIO_PORT: "9000"
+  MINIO_CONSOLE_PORT: "9001"
+  MINIO_BUCKET_MEDICAL_IMAGES: "medical-images"
+  MINIO_BUCKET_AUDIO: "audio-recordings"
+  MINIO_BUCKET_DOCUMENTS: "documents"
+  MINIO_BUCKET_MODELS: "models"
+  MINIO_BUCKET_BACKUPS: "backups"
+  MINIO_REGION: "af-south-1"
+
+  # Model Endpoints (self-hosted, no NIM dependencies)
+  ASR_MODEL_ENDPOINT: "http://asr-service.healthcare.svc.cluster.local:8000/v1/audio/transcriptions"
+  ASR_MODEL_NAME: "openai/whisper-large-v3"
+  ASR_MODEL_DEVICE: "cuda"
+  ASR_SAMPLE_RATE: "16000"
+  ASR_LANGUAGE: "en"
+  ASR_BEAM_SIZE: "5"
+  TTS_MODEL_ENDPOINT: "http://tts-service.healthcare.svc.cluster.local:8000/v1/audio/speech"
+  TTS_MODEL_NAME: "coqui-ai/TTS"
+  TTS_MODEL_DEVICE: "cuda"
+  TTS_SAMPLE_RATE: "24000"
+  TTS_DEFAULT_VOICE: "african_female_1"
+  TTS_SUPPORTED_LANGUAGES: "en,ny,zu,xh,st,tn,ts,ve,nr,ss"
+  RAG_MODEL_ENDPOINT: "http://rag-service.healthcare.svc.cluster.local:8000/v1/rag"
+  RAG_EMBEDDING_MODEL: "BAAI/bge-small-en-v1.5"
+  RAG_CHUNK_SIZE: "512"
+  RAG_CHUNK_OVERLAP: "128"
+  RAG_TOP_K: "5"
+  RAG_RERANK_ENABLED: "true"
+
+  # EMR Configuration
+  EMR_API_BASE_URL: "http://emr-service.healthcare.svc.cluster.local:8000/api/v1"
+  EMR_SYNC_INTERVAL_SECONDS: "300"
+  EMR_BATCH_SIZE: "100"
+  EMR_CACHE_TTL_SECONDS: "3600"
+
+  # Agent Orchestrator
+  AGENT_ORCHESTRATOR_URL: "http://agent-orchestrator.healthcare.svc.cluster.local:8000"
+  AGENT_MAX_TIMEOUT_SECONDS: "120"
+  AGENT_MAX_RETRIES: "3"
+  AGENT_CONCURRENCY_LIMIT: "10"
+  AGENT_MEMORY_TTL_HOURS: "24"
+
+  # Celery Configuration
+  CELERY_BROKER_URL: "redis://redis-headless.healthcare.svc.cluster.local:6379/1"
+  CELERY_RESULT_BACKEND: "redis://redis-headless.healthcare.svc.cluster.local:6379/1"
+  CELERY_TASK_SERIALIZER: "json"
+  CELERY_RESULT_SERIALIZER: "json"
+  CELERY_ACCEPT_CONTENT: "json"
+  CELERY_TIMEZONE: "Africa/Lusaka"
+  CELERY_ENABLE_UTC: "true"
+  CELERY_TASK_TRACK_STARTED: "true"
+  CELERY_TASK_TIME_LIMIT: "1800"
+  CELERY_TASK_SOFT_TIME_LIMIT: "1500"
+  CELERY_WORKER_CONCURRENCY: "4"
+  CELERY_WORKER_PREFETCH_MULTIPLIER: "1"
+  CELERY_WORKER_MAX_TASKS_PER_CHILD: "1000"
+
+  # Zambia-Specific Settings
+  ZAMBIA_TIMEZONE: "Africa/Lusaka"
+  ZAMBIA_COUNTRY_CODE: "ZM"
+  ZAMBIA_CURRENCY: "ZMW"
+  ZAMBIA_PHONE_PREFIX: "+260"
+  ZAMBIA_DEFAULT_LANGUAGE: "en"
+  ZAMBIA_LOCAL_LANGUAGES: "en,ny,zu,xh,st,tn,ts,ve,nr,ss"
+  ZAMBIA_HEALTH_REGIONS: "lusaka,copperbelt,southern,eastern,western,northern,luapula,central,north-western,muchinga"
+  ZAMBIA_DEFAULT_PROVINCE: "lusaka"
+  ZAMBIA_HEALTH_FACILITY_LEVELS: "hospital,clinic,health_post,community_outreach"
+  ZAMBIA_NATIONAL_ID_FORMAT: "\\d{6}/\\d{2}/\\d{1}"
+  ZAMBIA_PHONE_FORMAT: "\\+260\\d{9}"
+  ZAMBIA_DATA_COST_PER_MB: "0.05"
+  ZAMBIA_LOW_BANDWIDTH_MODE: "true"
+  ZAMBIA_OFFLINE_MODE_ENABLED: "true"
+  ZAMBIA_SMS_GATEWAY_ENABLED: "true"
+  ZAMBIA_USSD_ENABLED: "true"
+  ZAMBIA_MAX_FILE_SIZE_MB: "25"
+  ZAMBIA_COMPRESSION_QUALITY: "75"
+
+  # Disease Surveillance
+  SURVEILLANCE_REPORTING_INTERVAL_MINUTES: "60"
+  SURVEILLANCE_ALERT_THRESHOLD: "5"
+  SURVEILLANCE_SYNDROMIC_ENABLED: "true"
+  SURVEILLANCE_CONTACT_TRACING_ENABLED: "true"
+  SURVEILLANCE_GEO_MAPPING_ENABLED: "true"
+  SURVEILLANCE_OUTBREAK_DETECTION_ENABLED: "true"
+  SURVEILLANCE_NOTIFIABLE_DISEASES: "cholera,malaria,tb,hiv,ebola,covid-19,measles,polio,meningitis,rabies,typhoid,yellow_fever,dengue"
+  SURVEILLANCE_AGGREGATION_WINDOW_HOURS: "24"
+  SURVEILLANCE_ANOMALY_THRESHOLD_ZSCORE: "3.0"
+
+  # Medical Imaging
+  IMAGING_MODEL_ENDPOINT: "http://medical-imaging.healthcare.svc.cluster.local:8000/v1"
+  IMAGING_MAX_FILE_SIZE_MB: "200"
+  IMAGING_SUPPORTED_FORMATS: "dicom,nifti,nrrd,jpg,png"
+  IMAGING_DEFAULT_MODALITY: "x-ray"
+  IMAGING_BATCH_SIZE: "8"
+  IMAGING_CONFIDENCE_THRESHOLD: "0.85"
+
+  # Drug Supply Chain
+  SUPPLY_CHAIN_API_URL: "http://drug-supply-chain.healthcare.svc.cluster.local:8000/api/v1"
+  SUPPLY_CHAIN_SYNC_INTERVAL_MINUTES: "30"
+  SUPPLY_CHAIN_LOW_STOCK_THRESHOLD: "20"
+  SUPPLY_CHAIN_EXPIRY_WARNING_DAYS: "90"
+  SUPPLY_CHAIN_ORDER_MINIMUM_QUANTITY: "100"
+
+  # Community Health
+  COMMUNITY_HEALTH_URL: "http://community-health.healthcare.svc.cluster.local:8000"
+  COMMUNITY_HEALTH_WORKER_SYNC_INTERVAL: "3600"
+  COMMUNITY_HEALTH_MAX_HOUSEHOLDS_PER_WORKER: "200"
+  COMMUNITY_HEALTH_OFFLINE_SYNC_BATCH_SIZE: "50"
+
+  # Notifications
+  NOTIFICATION_EMAIL_ENABLED: "true"
+  NOTIFICATION_SMS_ENABLED: "true"
+  NOTIFICATION_PUSH_ENABLED: "true"
+  NOTIFICATION_WHATSAPP_ENABLED: "true"
+  NOTIFICATION_USSD_ENABLED: "true"
+  NOTIFICATION_RETRY_MAX_ATTEMPTS: "3"
+  NOTIFICATION_RETRY_BACKOFF_SECONDS: "300"
+  NOTIFICATION_BATCH_SIZE: "100"
+  NOTIFICATION_SMS_PROVIDER: "africastalking"
+  NOTIFICATION_EMAIL_PROVIDER: "smtp"
+
+  # Frontend
+  NEXT_PUBLIC_API_URL: "https://api.healthcare.zm"
+  NEXT_PUBLIC_WS_URL: "wss://api.healthcare.zm/ws"
+  NEXT_PUBLIC_APP_NAME: "UbuntuCare"
+  NEXT_PUBLIC_APP_DESCRIPTION: "AI-Powered Healthcare Platform for Zambia"
+  NEXT_PUBLIC_DEFAULT_LANGUAGE: "en"
+  NEXT_PUBLIC_SUPPORTED_LANGUAGES: "en,ny,zu,xh"
+  NEXT_PUBLIC_SENTRY_DSN: ""
+  NEXT_PUBLIC_ANALYTICS_ID: ""
+  NEXT_PUBLIC_GTM_ID: ""
+
+  # Feature Flags
+  FF_ASR_ENABLED: "true"
+  FF_TTS_ENABLED: "true"
+  FF_RAG_ENABLED: "true"
+  FF_AGENT_ORCHESTRATOR_ENABLED: "true"
+  FF_EMR_INTEGRATION_ENABLED: "true"
+  FF_DISEASE_SURVEILLANCE_ENABLED: "true"
+  FF_COMMUNITY_HEALTH_ENABLED: "true"
+  FF_MEDICAL_IMAGING_ENABLED: "true"
+  FF_DRUG_SUPPLY_CHAIN_ENABLED: "true"
+  FF_NOTIFICATIONS_ENABLED: "true"
+  FF_OFFLINE_MODE_ENABLED: "true"
+  FF_SYNDROMIC_SURVEILLANCE_ENABLED: "true"
+  FF_CONTACT_TRACING_ENABLED: "true"
+  FF_GEO_MAPPING_ENABLED: "true"
+  FF_LOW_BANDWIDTH_MODE_ENABLED: "true"
+  FF_AUDIT_LOGGING_ENABLED: "true"
+  FF_PHI_MASKING_ENABLED: "true"
+  FF_CONSENT_MANAGEMENT_ENABLED: "true"
+  FF_MULTI_TENANT_ENABLED: "false"
+  FF_MAINTENANCE_MODE: "false"
+  FF_DEBUG_MODE: "false"
+
+  # Logging & Observability
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+  LOG_OUTPUT: "stdout"
+  METRICS_ENABLED: "true"
+  METRICS_PORT: "9090"
+  TRACING_ENABLED: "true"
+  TRACING_SAMPLING_RATE: "0.1"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector.healthcare.svc.cluster.local:4318"
+  OTEL_SERVICE_NAME: "healthcare-platform"
+  OTEL_RESOURCE_ATTRIBUTES: "deployment.environment=production,service.version=1.0.0,cloud.region=af-south-1,cloud.provider=baremetal,country=zm"

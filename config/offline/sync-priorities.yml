@@ -1,0 +1,298 @@
+# =============================================================================
+# Sync Priority Configuration — UbuntuCare (Zambia)
+# =============================================================================
+# Defines which data types sync at which priority level and the associated
+# behavior for conflict resolution, compression, and retry logic.
+
+version: "1.0"
+
+default_sync_behavior:
+  retry_max_attempts: 5
+  retry_backoff_seconds: 30
+  compression_enabled: true
+  encryption_enabled: true
+  timeout_seconds: 120
+
+# ---------------------------------------------------------------------------
+# Critical — Sync Immediately (Real-time or near real-time)
+# ---------------------------------------------------------------------------
+critical:
+  label: "Critical"
+  sync_interval_seconds: 30
+  sync_on_change: true
+  max_batch_age_seconds: 60
+  channel: "websocket"
+  retry_immediately: true
+  queue_priority: 100
+  compression: false
+  require_ack: true
+  data_types:
+    lab_results:
+      description: "Laboratory test results (Malaria RDT, HIV PCR, TB GeneXpert, etc.)"
+      conflict_resolution: "server_wins"
+      ttl_days: 365
+      encryption_required: true
+      sync_queue: "high_priority"
+    referrals:
+      description: "Patient referrals between facilities"
+      conflict_resolution: "last_write_wins"
+      ttl_days: 90
+      encryption_required: true
+      sync_queue: "high_priority"
+    emergency_alerts:
+      description: "Emergency alerts, outbreak notifications, disease surveillance"
+      conflict_resolution: "server_wins"
+      ttl_days: 30
+      encryption_required: false
+      sync_queue: "high_priority"
+      ack_required: true
+      escalation_on_failure:
+        enabled: true
+        sms_after_minutes: 5
+        call_after_minutes: 15
+    critical_patient_updates:
+      description: "Life-threatening patient status changes"
+      conflict_resolution: "server_wins"
+      ttl_days: 365
+      encryption_required: true
+      sync_queue: "high_priority"
+      ack_required: true
+    drug_stock_emergency:
+      description: "Critical stockouts of essential medicines"
+      conflict_resolution: "server_wins"
+      ttl_days: 60
+      encryption_required: false
+      sync_queue: "high_priority"
+
+# ---------------------------------------------------------------------------
+# High — Next Available Sync
+# ---------------------------------------------------------------------------
+high:
+  label: "High"
+  sync_interval_seconds: 300
+  sync_on_change: true
+  max_batch_age_seconds: 600
+  channel: "https"
+  retry_immediately: false
+  queue_priority: 75
+  compression: true
+  compression_algorithm: "gzip"
+  compression_level: 4
+  require_ack: false
+  data_types:
+    appointments:
+      description: "Patient appointments and scheduling"
+      conflict_resolution: "last_write_wins"
+      ttl_days: 90
+      encryption_required: false
+    prescriptions:
+      description: "Medication prescriptions and dispensation records"
+      conflict_resolution: "last_write_wins"
+      ttl_days: 365
+      encryption_required: true
+    clinical_notes:
+      description: "Clinical consultation notes, SOAP notes"
+      conflict_resolution: "server_wins"
+      ttl_days: 730
+      encryption_required: true
+    lab_orders:
+      description: "Lab test orders placed by clinicians"
+      conflict_resolution: "last_write_wins"
+      ttl_days: 90
+      encryption_required: true
+    vitals:
+      description: "Patient vital signs recordings"
+      conflict_resolution: "last_write_wins"
+      ttl_days: 365
+      encryption_required: false
+    imaging_orders:
+      description: "X-ray, ultrasound, and other imaging orders"
+      conflict_resolution: "last_write_wins"
+      ttl_days: 90
+      encryption_required: false
+    immunization_records:
+      description: "Vaccination records (Zambia EPI schedule)"
+      conflict_resolution: "server_wins"
+      ttl_days: 730
+      encryption_required: true
+    maternity_records:
+      description: "Maternal health records (ANC, PNC, delivery)"
+      conflict_resolution: "server_wins"
+      ttl_days: 730
+      encryption_required: true
+
+# ---------------------------------------------------------------------------
+# Medium — Daily Sync
+# ---------------------------------------------------------------------------
+medium:
+  label: "Medium"
+  sync_interval_seconds: 3600
+  sync_on_change: true
+  max_batch_age_seconds: 7200
+  channel: "https"
+  retry_immediately: false
+  queue_priority: 50
+  compression: true
+  compression_algorithm: "zstd"
+  compression_level: 6
+  require_ack: false
+  data_types:
+    patient_demographics:
+      description: "Patient registration and demographic information"
+      conflict_resolution: "server_wins"
+      ttl_days: 730
+      encryption_required: true
+    inventory:
+      description: "Pharmaceutical and supply inventory"
+      conflict_resolution: "last_write_wins"
+      ttl_days: 60
+      encryption_required: false
+    staff_records:
+      description: "Healthcare worker records and assignments"
+      conflict_resolution: "server_wins"
+      ttl_days: 365
+      encryption_required: true
+    equipment_status:
+      description: "Medical equipment status and maintenance logs"
+      conflict_resolution: "last_write_wins"
+      ttl_days: 30
+      encryption_required: false
+    billing_records:
+      description: "Patient billing and insurance claims"
+      conflict_resolution: "server_wins"
+      ttl_days: 365
+      encryption_required: true
+    chronic_disease_registry:
+      description: "Chronic disease patient registry (HIV, TB, Diabetes, Hypertension)"
+      conflict_resolution: "server_wins"
+      ttl_days: 730
+      encryption_required: true
+
+# ---------------------------------------------------------------------------
+# Low — Weekly Sync
+# ---------------------------------------------------------------------------
+low:
+  label: "Low"
+  sync_interval_seconds: 43200
+  sync_on_change: false
+  max_batch_age_seconds: 86400
+  channel: "https"
+  retry_immediately: false
+  queue_priority: 25
+  compression: true
+  compression_algorithm: "zstd"
+  compression_level: 9
+  require_ack: false
+  data_types:
+    analytics:
+      description: "Aggregated analytics data and dashboards"
+      conflict_resolution: "server_wins"
+      ttl_days: 365
+      encryption_required: false
+    research_data:
+      description: "De-identified research and clinical trial data"
+      conflict_resolution: "server_wins"
+      ttl_days: 1825
+      encryption_required: true
+    public_health_reports:
+      description: "DHIS2-compatible public health reports"
+      conflict_resolution: "server_wins"
+      ttl_days: 1825
+      encryption_required: false
+    audit_logs:
+      description: "System audit and access logs"
+      conflict_resolution: "server_wins"
+      ttl_days: 90
+      encryption_required: true
+    model_telemetry:
+      description: "AI model performance metrics and drift data"
+      conflict_resolution: "last_write_wins"
+      ttl_days: 30
+      encryption_required: false
+    training_data:
+      description: "Annotated data for model improvement"
+      conflict_resolution: "server_wins"
+      ttl_days: 365
+      encryption_required: true
+    backup_verification:
+      description: "Backup integrity verification reports"
+      conflict_resolution: "last_write_wins"
+      ttl_days: 30
+      encryption_required: false
+
+# ---------------------------------------------------------------------------
+# Offline Queue Management
+# ---------------------------------------------------------------------------
+offline_queue:
+  type: "persistent_sqlite"
+  max_queue_size_mb: 512
+  max_entries: 100000
+  cleanup_policy:
+    delete_after_sync: true
+    max_age_days: 30
+    archive_instead_of_delete: false
+  deduplication:
+    enabled: true
+    window_minutes: 5
+    strategy: "idempotency_key"
+
+# ---------------------------------------------------------------------------
+# Bandwidth Management Per Priority
+# ---------------------------------------------------------------------------
+bandwidth_allocation:
+  critical:
+    reserved_percent: 40
+    max_bytes_per_sync: 10485760
+  high:
+    reserved_percent: 30
+    max_bytes_per_sync: 52428800
+  medium:
+    reserved_percent: 20
+    max_bytes_per_sync: 104857600
+  low:
+    reserved_percent: 10
+    max_bytes_per_sync: 524288000
+  background:
+    reserved_percent: 0
+    max_bytes_per_sync: 0
+    only_on_charging: true
+    only_on_wifi: true
+    only_on_unmetered: true
+
+# ---------------------------------------------------------------------------
+# Conflict Resolution Matrix
+# ---------------------------------------------------------------------------
+conflict_resolution_matrix:
+  default_strategy: "server_wins"
+  strategies:
+    server_wins:
+      description: "Server copy always takes precedence"
+      applicable_to:
+        - lab_results
+        - emergency_alerts
+        - clinical_notes
+        - immunization_records
+        - patient_demographics
+        - billing_records
+        - analytics
+        - research_data
+        - referrals
+    last_write_wins:
+      description: "Most recent timestamp wins regardless of origin"
+      applicable_to:
+        - appointments
+        - prescriptions
+        - vitals
+        - inventory
+        - staff_records
+        - equipment_status
+    merge:
+      description: "Merge algorithm for list-based data"
+      applicable_to:
+        - chronic_disease_registry
+        - maternity_records
+    manual_review:
+      description: "Flag for human review"
+      applicable_to:
+        - financial_transactions
+        - patient_id_duplicates

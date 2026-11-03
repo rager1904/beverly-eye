@@ -1,0 +1,415 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: healthcare
+
+resources:
+  - ../../base
+
+namePrefix: prod-
+
+commonLabels:
+  environment: production
+  region: africa-south
+  country: zm
+  tier: production
+
+patches:
+  - target:
+      kind: Deployment
+      name: api-gateway
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 5
+      - op: add
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: "1"
+          memory: "1Gi"
+      - op: add
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "4"
+          memory: "4Gi"
+      - op: add
+        path: /spec/template/spec/topologySpreadConstraints
+        value:
+          - maxSkew: 1
+            topologyKey: kubernetes.io/hostname
+            whenUnsatisfiable: DoNotSchedule
+            labelSelector:
+              matchLabels:
+                app: api-gateway
+          - maxSkew: 1
+            topologyKey: topology.kubernetes.io/zone
+            whenUnsatisfiable: ScheduleAnyway
+            labelSelector:
+              matchLabels:
+                app: api-gateway
+
+  - target:
+      kind: Deployment
+      name: frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: add
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: "500m"
+          memory: "512Mi"
+      - op: add
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "2"
+          memory: "2Gi"
+
+  - target:
+      kind: Deployment
+      name: emr-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+  - target:
+      kind: Deployment
+      name: agent-orchestrator
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+  - target:
+      kind: Deployment
+      name: rag-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+  - target:
+      kind: Deployment
+      name: disease-surveillance
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+  - target:
+      kind: Deployment
+      name: community-health
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+  - target:
+      kind: Deployment
+      name: notifications
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+  - target:
+      kind: Deployment
+      name: celery-worker
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 5
+      - op: add
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: "1"
+          memory: "2Gi"
+      - op: add
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "4"
+          memory: "8Gi"
+
+  - target:
+      kind: Deployment
+      name: drug-supply-chain
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+  - target:
+      kind: Deployment
+      name: asr-service
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          nvidia.com/gpu.product:NVIDIA-A100
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: nvidia.com/gpu
+            operator: Exists
+            effect: NoSchedule
+          - key: gpu-type
+            operator: Equal
+            value: inference
+            effect: NoSchedule
+          - key: node-role.kubernetes.io/gpu
+            operator: Exists
+            effect: NoSchedule
+
+  - target:
+      kind: Deployment
+      name: tts-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          nvidia.com/gpu.product:NVIDIA-A100
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: nvidia.com/gpu
+            operator: Exists
+            effect: NoSchedule
+          - key: gpu-type
+            operator: Equal
+            value: inference
+            effect: NoSchedule
+          - key: node-role.kubernetes.io/gpu
+            operator: Exists
+            effect: NoSchedule
+
+  - target:
+      kind: Deployment
+      name: medical-imaging
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          nvidia.com/gpu.product:NVIDIA-A100
+          gpu-type: memory-optimized
+      - op: add
+        path: /spec/template/spec/tolerations
+        value:
+          - key: nvidia.com/gpu
+            operator: Exists
+            effect: NoSchedule
+          - key: gpu-type
+            operator: Equal
+            value: memory-optimized
+            effect: NoSchedule
+          - key: node-role.kubernetes.io/gpu
+            operator: Exists
+            effect: NoSchedule
+
+  - target:
+      kind: StatefulSet
+      name: postgres
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: add
+        path: /spec/template/spec/containers/0/resources/requests
+        value:
+          cpu: "2"
+          memory: "8Gi"
+      - op: add
+        path: /spec/template/spec/containers/0/resources/limits
+        value:
+          cpu: "8"
+          memory: "32Gi"
+      - op: replace
+        path: /spec/template/spec/affinity
+        value:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              - labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - postgres
+                topologyKey: kubernetes.io/hostname
+
+  - target:
+      kind: StatefulSet
+      name: redis
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 5
+
+  - target:
+      kind: StatefulSet
+      name: minio
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 6
+
+  - target:
+      kind: StatefulSet
+      name: qdrant
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+  - target:
+      kind: StatefulSet
+      name: weaviate
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+
+  - target:
+      kind: ConfigMap
+      name: healthcare-config
+    patch: |-
+      - op: replace
+        path: /data/LOG_LEVEL
+        value: "INFO"
+      - op: replace
+        path: /data/ZAMBIA_LOW_BANDWIDTH_MODE
+        value: "false"
+      - op: replace
+        path: /data/ZAMBIA_OFFLINE_MODE_ENABLED
+        value: "false"
+      - op: replace
+        path: /data/FF_MAINTENANCE_MODE
+        value: "false"
+      - op: replace
+        path: /data/FF_DEBUG_MODE
+        value: "false"
+      - op: replace
+        path: /data/CELERY_WORKER_CONCURRENCY
+        value: "8"
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: api-gateway-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 5
+      - op: replace
+        path: /spec/maxReplicas
+        value: 20
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: celery-worker-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 5
+      - op: replace
+        path: /spec/maxReplicas
+        value: 20
+
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: frontend-hpa
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 12
+
+  - target:
+      kind: PodDisruptionBudget
+      name: api-gateway-pdb
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 3
+
+  - target:
+      kind: PodDisruptionBudget
+      name: postgres-pdb
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 2
+
+  - target:
+      kind: PodDisruptionBudget
+      name: redis-pdb
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 3
+
+images:
+  - name: ubuntucare/api-gateway
+    newTag: prod-latest
+  - name: ubuntucare/emr-service
+    newTag: prod-latest
+  - name: ubuntucare/agent-orchestrator
+    newTag: prod-latest
+  - name: ubuntucare/asr-service
+    newTag: prod-latest
+  - name: ubuntucare/tts-service
+    newTag: prod-latest
+  - name: ubuntucare/rag-service
+    newTag: prod-latest
+  - name: ubuntucare/frontend
+    newTag: prod-latest
+  - name: ubuntucare/celery-worker
+    newTag: prod-latest
+  - name: ubuntucare/celery-beat
+    newTag: prod-latest
+  - name: ubuntucare/disease-surveillance
+    newTag: prod-latest
+  - name: ubuntucare/community-health
+    newTag: prod-latest
+  - name: ubuntucare/medical-imaging
+    newTag: prod-latest
+  - name: ubuntucare/drug-supply-chain
+    newTag: prod-latest
+  - name: ubuntucare/notifications
+    newTag: prod-latest
+
+configMapGenerator:
+  - name: healthcare-config
+    behavior: merge
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+
+secretGenerator:
+  - name: postgres-credentials
+    behavior: replace
+    literals:
+      - POSTGRES_PASSWORD=prod-secure-password
+  - name: redis-credentials
+    behavior: replace
+    literals:
+      - REDIS_PASSWORD=prod-secure-redis
+  - name: minio-credentials
+    behavior: replace
+    literals:
+      - MINIO_ROOT_PASSWORD=prod-secure-minio
+  - name: api-keys
+    behavior: replace
+    literals:
+      - JWT_SECRET=prod-jwt-secret
+      - ENCRYPTION_KEY=prod-encryption-key-32byte!
+
+patchesStrategicMerge:
+  - ingress-patch.yaml

@@ -1,0 +1,152 @@
+name: "Deploy to Kubernetes"
+description: "Deploy services to Kubernetes cluster with canary support"
+author: "Zambia Health Platform"
+
+inputs:
+  cluster-type:
+    description: "Kubernetes cluster type (eks, aks, gke, oke)"
+    required: true
+    default: "eks"
+  namespace:
+    description: "Kubernetes namespace"
+    required: true
+  manifest-dir:
+    description: "Directory containing Kubernetes manifests"
+    required: true
+  image-tag:
+    description: "Docker image tag to deploy"
+    required: true
+  registry:
+    description: "Container registry URL"
+    required: true
+    default: "ghcr.io"
+  repository:
+    description: "GitHub repository name"
+    required: false
+    default: ${{ github.repository }}
+  canary:
+    description: "Enable canary deployment"
+    required: false
+    default: "false"
+  canary-percentage:
+    description: "Canary traffic percentage (1-100)"
+    required: false
+    default: "10"
+  health-check-endpoint:
+    description: "Health check URL to verify deployment"
+    required: false
+    default: ""
+  health-check-timeout:
+    description: "Health check timeout in seconds"
+    required: false
+    default: "120"
+  rollout-timeout:
+    description: "Rollout status timeout in seconds"
+    required: false
+    default: "300"
+  rollback-on-failure:
+    description: "Automatically rollback on failure"
+    required: false
+    default: "true"
+
+outputs:
+  deployment_id:
+    description: "Deployment ID"
+    value: ${{ steps.deploy-info.outputs.deployment_id }}
+  rollout_status:
+    description: "Rollout status"
+    value: ${{ steps.rollout-status.outputs.status }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set deploy info
+      id: deploy-info
+      shell: bash
+      run: |
+        echo "deployment_id=$(date +%s)-${{ inputs.image-tag }}" >> $GITHUB_OUTPUT
+        echo "Deploying to namespace: ${{ inputs.namespace }}"
+        echo "Image tag: ${{ inputs.image-tag }}"
+        echo "Cluster type: ${{ inputs.cluster-type }}"
+
+    - name: Update image tags in manifests
+      shell: bash
+      run: |
+        find ${{ inputs.manifest-dir }} -name "*.yaml" -o -name "*.yml" | while read f; do
+          if grep -q "image:" "$f" 2>/dev/null; then
+            sed -i "s|image:.*|image: ${{ inputs.registry }}/${{ inputs.repository }}/${f##*/}:${{ inputs.image-tag }}|g" "$f"
+          fi
+        done
+        echo "Updated image tags to ${{ inputs.image-tag }}"
+
+    - name: Ensure namespace exists
+      shell: bash
+      run: |
+        kubectl create namespace ${{ inputs.namespace }} --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Create canary deployment
+      if: ${{ inputs.canary == 'true' }}
+      shell: bash
+      run: |
+        echo "Creating canary deployment (${{ inputs.canary-percentage }}% traffic)..."
+        kubectl apply -f ${{ inputs.manifest-dir }} --namespace=${{ inputs.namespace }}
+
+    - name: Create full deployment
+      if: ${{ inputs.canary != 'true' }}
+      shell: bash
+      run: |
+        echo "Creating full deployment..."
+        kubectl apply -f ${{ inputs.manifest-dir }} --namespace=${{ inputs.namespace }}
+
+    - name: Wait for rollout
+      id: rollout-status
+      shell: bash
+      run: |
+        if kubectl rollout status deployment \
+          --namespace=${{ inputs.namespace }} \
+          --timeout=${{ inputs.rollout-timeout }}s; then
+          echo "status=success" >> $GITHUB_OUTPUT
+        else
+          echo "status=failed" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+
+    - name: Verify deployment status
+      shell: bash
+      run: |
+        kubectl get pods \
+          --namespace=${{ inputs.namespace }} \
+          --output=wide
+
+    - name: Health check
+      if: ${{ inputs.health-check-endpoint != '' }}
+      shell: bash
+      run: |
+        echo "Running health check against ${{ inputs.health-check-endpoint }}..."
+        for i in $(seq 1 ${{ inputs.health-check-timeout }}); do
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 10 \
+            ${{ inputs.health-check-endpoint }} 2>/dev/null || echo "000")
+          if [ "$STATUS" = "200" ] || [ "$STATUS" = "204" ]; then
+            echo "Health check passed (HTTP $STATUS)"
+            exit 0
+          fi
+          sleep 5
+        done
+        echo "Health check failed after ${{ inputs.health-check-timeout }} seconds"
+        exit 1
+
+    - name: Auto-rollback on failure
+      if: ${{ failure() && inputs.rollback-on-failure == 'true' }}
+      shell: bash
+      run: |
+        echo "Deployment failed. Initiating rollback..."
+        PREVIOUS_REVISION=$(( $(kubectl rollout history deployment \
+          --namespace=${{ inputs.namespace }} | tail -1 | awk '{print $1}') - 1 ))
+        kubectl rollout undo deployment \
+          --namespace=${{ inputs.namespace }} \
+          --to-revision=${PREVIOUS_REVISION}
+        kubectl rollout status deployment \
+          --namespace=${{ inputs.namespace }} \
+          --timeout=120s
+        echo "Rollback completed"

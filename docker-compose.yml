@@ -1,0 +1,960 @@
+# =============================================================================
+# UbuntuCare - Full Production Stack (Zambia/Africa)
+# No NVIDIA NIM dependencies - pure open-source
+# =============================================================================
+# Usage:
+#   docker compose build    # Build all images
+#   docker compose up -d    # Start all services
+#   docker compose down     # Stop all services
+#   docker compose logs -f  # Follow logs
+# =============================================================================
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+
+x-gpu-service: &gpu-service
+  restart: unless-stopped
+
+x-postgres-env: &postgres-env
+  POSTGRES_USER: ${POSTGRES_USER:-ubuntucare}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+  POSTGRES_DB: ${POSTGRES_DB:-ubuntucare}
+  POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+
+# ────────────────────────────────────────────────────────────────────────────
+# Networks
+# ────────────────────────────────────────────────────────────────────────────
+networks:
+  ubuntucare-backend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${BACKEND_SUBNET:-172.20.0.0/16}
+          gateway: ${BACKEND_GATEWAY:-172.20.0.1}
+  ubuntucare-frontend:
+    driver: bridge
+  ubuntucare-monitoring:
+    driver: bridge
+  ubuntucare-elk:
+    driver: bridge
+
+# ────────────────────────────────────────────────────────────────────────────
+# Volumes
+# ────────────────────────────────────────────────────────────────────────────
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  qdrant-data:
+    driver: local
+  weaviate-data:
+    driver: local
+  neo4j-data:
+    driver: local
+  minio-data:
+    driver: local
+  keycloak-data:
+    driver: local
+  elasticsearch-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  model-cache:
+    driver: local
+  rag-vectorstore:
+    driver: local
+  whisper-cache:
+    driver: local
+  portainer-data:
+    driver: local
+
+# ────────────────────────────────────────────────────────────────────────────
+# Services
+# ────────────────────────────────────────────────────────────────────────────
+services:
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Python base image (build before AI/worker services)
+  # Usage: docker compose build python-base
+  # ────────────────────────────────────────────────────────────────────────
+  python-base:
+    build:
+      context: .
+      dockerfile: infra/docker/base/Dockerfile.python
+    image: ubuntucare-base/python:${BASE_IMAGE_TAG:-latest}
+
+  # ────────────────────────────────────────────────────────────────────────
+  # PostgreSQL 15 with pgvector
+  # ────────────────────────────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg15
+    <<: *service-defaults
+    
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      <<: *postgres-env
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./config/postgres/init/:/docker-entrypoint-initdb.d/:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ubuntucare} -d ${POSTGRES_DB:-ubuntucare}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Redis 7
+  # ────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    <<: *service-defaults
+    
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+      - ./config/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Qdrant (Vector DB - primary)
+  # ────────────────────────────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.8.0
+    <<: *service-defaults
+    
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Weaviate (Vector DB - secondary)
+  # ────────────────────────────────────────────────────────────────────────
+  weaviate:
+    image: semitechnologies/weaviate:1.24.0
+    <<: *service-defaults
+    profiles: ["ai"]
+    
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${WEAVIATE_PORT:-8080}:8080"
+      - "50051:50051"
+    volumes:
+      - weaviate-data:/var/lib/weaviate
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "false"
+      AUTHENTICATION_APIKEY_ENABLED: "true"
+      AUTHENTICATION_APIKEY_ALLOWED_KEYS: ${WEAVIATE_API_KEY:-ubuntucare-weaviate-key}
+      AUTHORIZATION_ADMIN_USERS: admin
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      DEFAULT_VECTORIZER_MODULE: text2vec-transformers
+      ENABLE_MODULES: text2vec-transformers,generative-openai,qna-transformers
+      CLUSTER_HOSTNAME: node1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Neo4j (Knowledge Graph)
+  # ────────────────────────────────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5-community
+    <<: *service-defaults
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${NEO4J_HTTP_PORT:-7474}:7474"
+      - "${NEO4J_BOLT_PORT:-7687}:7687"
+    volumes:
+      - neo4j-data:/data
+    environment:
+      NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-CHANGE_ME__neo4j}
+      NEO4J_dbms_memory_pagecache_size: ${NEO4J_CACHE_SIZE:-512M}
+      NEO4J_dbms_memory_heap_initial__size: ${NEO4J_HEAP_INIT:-512M}
+      NEO4J_dbms_memory_heap_max__size: ${NEO4J_HEAP_MAX:-1G}
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "${NEO4J_USER:-neo4j}", "-p", "${NEO4J_PASSWORD:-CHANGE_ME__neo4j}", "RETURN 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # MinIO (S3-compatible storage)
+  # ────────────────────────────────────────────────────────────────────────
+  minio:
+    image: minio/minio:RELEASE.2024-01-16T16-07-38Z
+    <<: *service-defaults
+    
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${MINIO_PORT:-9000}:9000"   # API
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"  # Console
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-ubuntucare}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+      MINIO_DOMAIN: minio
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # MinIO Client Setup (creates buckets)
+  # ────────────────────────────────────────────────────────────────────────
+  minio-setup:
+    image: minio/mc:latest
+    <<: *service-defaults
+    networks:
+      - ubuntucare-backend
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-ubuntucare}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set ubuntucare http://minio:9000 $${MINIO_ROOT_USER} $${MINIO_ROOT_PASSWORD} &&
+      mc mb -p ubuntucare/audio-recordings &&
+      mc mb -p ubuntucare/medical-images &&
+      mc mb -p ubuntucare/reports &&
+      mc mb -p ubuntucare/drug-supply-chain &&
+      mc mb -p ubuntucare/models &&
+      mc policy set public ubuntucare/audio-recordings &&
+      echo 'MinIO buckets created successfully'
+      "
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Keycloak (Authentication / SSO)
+  # ────────────────────────────────────────────────────────────────────────
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0
+    <<: *service-defaults
+    
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${KEYCLOAK_PORT:-8080}:8080"
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-ubuntucare}
+      KC_DB_USERNAME: ${POSTGRES_USER:-ubuntucare}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:-keycloak}
+      KC_HOSTNAME_STRICT: "false"
+      KC_PROXY: edge
+      KC_HTTP_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # Keycloak image has no curl/wget; use bash /dev/tcp against the Quarkus health endpoint
+      test:
+        - CMD-SHELL
+        - >
+          exec 3<>/dev/tcp/127.0.0.1/8080 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '200 OK' <&3
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 180s
+    command: ["start"]
+    logging: *default-logging
+
+  keycloak-setup:
+    image: python:3.11-slim
+    networks:
+      - ubuntucare-backend
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    environment:
+      KEYCLOAK_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_USER: ${KEYCLOAK_ADMIN_USER:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD is required}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-ubuntucare}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-api-gateway}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-api-gateway-secret-change-me}
+      KEYCLOAK_FRONTEND_CLIENT_ID: ${KEYCLOAK_FRONTEND_CLIENT_ID:-frontend}
+      KEYCLOAK_DEMO_USER_PASSWORD: ${KEYCLOAK_DEMO_USER_PASSWORD:-UbuntuCare2024!}
+    volumes:
+      - ./scripts/setup:/setup:ro
+    restart: "no"
+    command: ["python", "/setup/setup_keycloak.py"]
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # API Gateway
+  # ────────────────────────────────────────────────────────────────────────
+  migrate:
+    build:
+      context: .
+      dockerfile: infra/docker/services/Dockerfile.migrations
+    networks:
+      - ubuntucare-backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-ubuntucare}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: infra/docker/services/Dockerfile.api-gateway
+      args:
+        BASE_IMAGE_TAG: ${BASE_IMAGE_TAG:-latest}
+    <<: *service-defaults
+    
+    networks:
+      - ubuntucare-backend
+      - ubuntucare-frontend
+    ports:
+      - "${API_GATEWAY_PORT:-8000}:8000"
+    environment:
+      SERVICE_NAME: api-gateway
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-4}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-ubuntucare}
+      REDIS_URL: redis://redis:6379/0
+      REDIS_HOST: redis
+      KEYCLOAK_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-ubuntucare}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-api-gateway}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-dev-api-gateway-secret-change-me}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-ubuntucare}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      keycloak-setup:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # EMR Service
+  # ────────────────────────────────────────────────────────────────────────
+  emr:
+    build:
+      context: .
+      dockerfile: infra/docker/services/Dockerfile.emr
+      args:
+        BASE_IMAGE_TAG: ${BASE_IMAGE_TAG:-latest}
+    <<: *service-defaults
+    
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${EMR_PORT:-8001}:8001"
+    environment:
+      SERVICE_NAME: emr
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-ubuntucare}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-ubuntucare}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?}
+      KEYCLOAK_SERVER_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-ubuntucare}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID:-ubuntucare-api}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      FHIR_VERSION: ${FHIR_VERSION:-R4}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      keycloak-setup:
+        condition: service_completed_successfully
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Agent Orchestrator (AI)
+  # ────────────────────────────────────────────────────────────────────────
+  agent-orchestrator:
+    build:
+      context: .
+      dockerfile: infra/docker/services/Dockerfile.agent-orchestrator
+      args:
+        BASE_IMAGE_TAG: ${BASE_IMAGE_TAG:-latest}
+    profiles: ["ai"]
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${AGENT_PORT:-8002}:8002"
+    <<: *gpu-service
+    environment:
+      SERVICE_NAME: agent-orchestrator
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-ubuntucare}
+      REDIS_URL: redis://redis:6379/0
+      LLM__MODEL_PATH: /data/models/llm/llama-2-7b-chat.Q4_K_M.gguf
+      LLM__CONTEXT_LENGTH: 4096
+      LLM__N_GPU_LAYERS: ${LLM_N_GPU_LAYERS:-35}
+      LLM__N_THREADS: ${LLM_N_THREADS:-8}
+      LLM__USE_MLOCK: "true"
+      RAG__QDRANT_HOST: qdrant
+      RAG__QDRANT_PORT: 6333
+      RAG__QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      RAG__WEAVIATE_HOST: weaviate
+      RAG__WEAVIATE_PORT: 8080
+      RAG__WEAVIATE_API_KEY: ${WEAVIATE_API_KEY:-ubuntucare-weaviate-key}
+      ASR__SERVICE_URL: http://asr:8003
+      TTS__SERVICE_URL: http://tts:8004
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - model-cache:/data/models
+      - rag-vectorstore:/data/rag
+    depends_on:
+      - postgres
+      - redis
+      - qdrant
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # ASR (Whisper) Service
+  # ────────────────────────────────────────────────────────────────────────
+  asr:
+    build:
+      context: .
+      dockerfile: infra/docker/services/Dockerfile.asr
+      args:
+        BASE_IMAGE_TAG: ${BASE_IMAGE_TAG:-latest}
+    profiles: ["ai"]
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${ASR_PORT:-8003}:8003"
+    <<: *gpu-service
+    environment:
+      SERVICE_NAME: asr
+      WHISPER_MODEL_SIZE: ${WHISPER_MODEL_SIZE:-small}
+      WHISPER_DEVICE: cpu
+      WHISPER_COMPUTE_TYPE: int8
+      WHISPER_LANGUAGE: ${WHISPER_LANG:-en}
+      WHISPER_BEAM_SIZE: 5
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - whisper-cache:/data/models/whisper
+      - model-cache:/data/huggingface
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # TTS (Coqui) Service
+  # ────────────────────────────────────────────────────────────────────────
+  tts:
+    build:
+      context: .
+      dockerfile: infra/docker/services/Dockerfile.tts
+      args:
+        BASE_IMAGE_TAG: ${BASE_IMAGE_TAG:-latest}
+    profiles: ["ai"]
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${TTS_PORT:-8004}:8004"
+    <<: *gpu-service
+    environment:
+      SERVICE_NAME: tts
+      TTS__DEVICE: cuda
+      TTS__SPEAKER_ID: ${TTS_SPEAKER_ID:-0}
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - model-cache:/data/models
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # RAG Service
+  # ────────────────────────────────────────────────────────────────────────
+  rag:
+    build:
+      context: .
+      dockerfile: infra/docker/services/Dockerfile.rag
+      args:
+        BASE_IMAGE_TAG: ${BASE_IMAGE_TAG:-latest}
+    profiles: ["ai"]
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${RAG_PORT:-8005}:8005"
+    <<: *gpu-service
+    environment:
+      SERVICE_NAME: rag
+      EMBEDDING_MODEL_NAME: ${RAG_EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+      POSTGRES_USER: ${POSTGRES_USER:-ubuntucare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      WEAVIATE_HOST: weaviate
+      WEAVIATE_PORT: 8080
+      WEAVIATE_API_KEY: ${WEAVIATE_API_KEY:-ubuntucare-weaviate-key}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-CHANGE_ME__neo4j}
+      REDIS_URL: redis://redis:6379/0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - model-cache:/data/models
+      - rag-vectorstore:/data/rag
+    depends_on:
+      - redis
+      - qdrant
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/api/v1/rag/health',timeout=30)"]
+      interval: 30s
+      timeout: 30s
+      retries: 5
+      start_period: 300s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Frontend (Next.js)
+  # ────────────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: infra/docker/services/Dockerfile.frontend
+    networks:
+      - ubuntucare-backend
+      - ubuntucare-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-/api/v1}
+      NEXT_PUBLIC_KEYCLOAK_URL: ${NEXT_PUBLIC_KEYCLOAK_URL:-http://localhost:8080}
+      NEXT_PUBLIC_KEYCLOAK_REALM: ${KEYCLOAK_REALM:-ubuntucare}
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: ${KEYCLOAK_FRONTEND_CLIENT_ID:-frontend}
+      NEXT_PUBLIC_SENTRY_DSN: ${SENTRY_DSN:-}
+      API_INTERNAL_URL: http://api-gateway:8000
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Celery Worker
+  # ────────────────────────────────────────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: infra/docker/services/Dockerfile.worker
+      args:
+        BASE_IMAGE_TAG: ${BASE_IMAGE_TAG:-latest}
+    profiles: ["ai"]
+    networks:
+      - ubuntucare-backend
+    <<: *gpu-service
+    environment:
+      SERVICE_NAME: worker
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      CELERY_CONCURRENCY: ${CELERY_CONCURRENCY:-4}
+      CELERY_LOG_LEVEL: ${LOG_LEVEL:-info}
+      CELERY_QUEUES: ${CELERY_QUEUES:-default,asr,tts,rag,emr,notifications}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-ubuntucare}
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-ubuntucare}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - model-cache:/data/models
+      - rag-vectorstore:/data/rag
+      - whisper-cache:/data/models/whisper
+    depends_on:
+      - redis
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A core.queue.celery_app status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Celery Beat (Scheduler)
+  # ────────────────────────────────────────────────────────────────────────
+  celery-beat:
+    build:
+      context: .
+      dockerfile: infra/docker/services/Dockerfile.worker
+      args:
+        BASE_IMAGE_TAG: ${BASE_IMAGE_TAG:-latest}
+    <<: *service-defaults
+    profiles: ["ai"]
+    networks:
+      - ubuntucare-backend
+    environment:
+      SERVICE_NAME: celery-beat
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-ubuntucare}:${POSTGRES_PASSWORD:?}@postgres:5432/${POSTGRES_DB:-ubuntucare}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    depends_on:
+      - redis
+      - postgres
+    entrypoint: ["celery", "-A", "core.queue.celery_app", "beat", "--loglevel=${LOG_LEVEL:-info}", "--pidfile=/tmp/celerybeat.pid", "--schedule=/tmp/celerybeat-schedule"]
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/celerybeat.pid && ps -p $(cat /tmp/celerybeat.pid) > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Flower (Celery Monitoring)
+  # ────────────────────────────────────────────────────────────────────────
+  flower:
+    image: mher/flower:2.0@sha256:${FLOWER_SHA256:-latest}
+    <<: *service-defaults
+    profiles: ["monitoring"]
+    networks:
+      - ubuntucare-backend
+      - ubuntucare-monitoring
+    ports:
+      - "${FLOWER_PORT:-5555}:5555"
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      FLOWER_PORT: 5555
+      FLOWER_BASIC_AUTH: ${FLOWER_USER:-admin}:${FLOWER_PASSWORD:?FLOWER_PASSWORD is required}
+    depends_on:
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5555/healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Nginx Reverse Proxy
+  # ────────────────────────────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine@sha256:${NGINX_SHA256:-latest}
+    <<: *service-defaults
+    networks:
+      - ubuntucare-frontend
+      - ubuntucare-backend
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./config/nginx/sites/:/etc/nginx/sites/:ro
+      - ./config/nginx/ssl/:/etc/nginx/ssl/:ro
+      - ./config/nginx/security/:/etc/nginx/security/:ro
+    depends_on:
+      - api-gateway
+      - frontend
+      - keycloak
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Portainer (Container Management)
+  # ────────────────────────────────────────────────────────────────────────
+  portainer:
+    image: portainer/portainer-ce:2.19@sha256:${PORTAINER_SHA256:-latest}
+    <<: *service-defaults
+    profiles: ["monitoring"]
+    networks:
+      - ubuntucare-backend
+    ports:
+      - "${PORTAINER_PORT:-9443}:9443"
+      - "${PORTAINER_HTTP_PORT:-9000}:9000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - portainer-data:/data
+    command: ["--log-level", "${PORTAINER_LOG_LEVEL:-INFO}"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # ELK Stack (Audit Logging)
+  # ────────────────────────────────────────────────────────────────────────
+  elasticsearch:
+    image: elasticsearch:8.12.0@sha256:${ES_SHA256:-latest}
+    <<: *service-defaults
+    profiles: ["elk"]
+    networks:
+      - ubuntucare-elk
+    ports:
+      - "${ES_PORT:-9200}:9200"
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "true"
+      xpack.security.enrollment.enabled: "false"
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:?ELASTIC_PASSWORD is required}
+      ES_JAVA_OPTS: -Xms${ES_HEAP_SIZE:-2g} -Xmx${ES_HEAP_SIZE:-2g}
+      cluster.name: ubuntucare
+      node.name: elasticsearch-01
+      network.host: 0.0.0.0
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -u elastic:${ELASTIC_PASSWORD} http://localhost:9200/_cluster/health | grep -q '\"status\":\"green\"\\|\"status\":\"yellow\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    logging: *default-logging
+
+  logstash:
+    image: logstash:8.12.0@sha256:${LOGSTASH_SHA256:-latest}
+    <<: *service-defaults
+    profiles: ["elk"]
+    networks:
+      - ubuntucare-backend
+      - ubuntucare-elk
+    ports:
+      - "${LOGSTASH_PORT:-5000}:5000"
+      - "9600:9600"
+    environment:
+      ES_HOST: elasticsearch
+      ES_PORT: "9200"
+      ELASTIC_USER: elastic
+      ELASTIC_PASSWORD: ${ELASTIC_PASSWORD:?}
+      LS_JAVA_OPTS: -Xms${LOGSTASH_HEAP_SIZE:-1g} -Xmx${LOGSTASH_HEAP_SIZE:-1g}
+    volumes:
+      - ./config/logstash/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./config/logstash/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9600/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+  kibana:
+    image: kibana:8.12.0@sha256:${KIBANA_SHA256:-latest}
+    <<: *service-defaults
+    profiles: ["elk"]
+    networks:
+      - ubuntucare-frontend
+      - ubuntucare-elk
+    ports:
+      - "${KIBANA_PORT:-5601}:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+      ELASTICSEARCH_USERNAME: elastic
+      ELASTICSEARCH_PASSWORD: ${ELASTIC_PASSWORD:?}
+      SERVER_PUBLIC_BASE_URL: ${KIBANA_URL:-http://localhost:5601}
+      SERVER_NAME: kibana
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s -f http://localhost:5601/api/status | grep -q 'green' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+
+  # ────────────────────────────────────────────────────────────────────────
+  # Prometheus + Grafana (via monitoring profile)
+  # ────────────────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.49.0@sha256:${PROMETHEUS_SHA256:-latest}
+    <<: *service-defaults
+    profiles: ["monitoring", "elk"]
+    networks:
+      - ubuntucare-monitoring
+      - ubuntucare-backend
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./config/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./config/prometheus/rules/:/etc/prometheus/rules/:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  grafana:
+    image: grafana/grafana:10.3.1@sha256:${GRAFANA_SHA256:-latest}
+    <<: *service-defaults
+    profiles: ["monitoring", "elk"]
+    networks:
+      - ubuntucare-monitoring
+      - ubuntucare-frontend
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_INSTALL_PLUGINS: grafana-piechart-panel
+      GF_SERVER_ROOT_URL: ${GRAFANA_URL:-http://localhost:3001}
+      GF_AUTH_DISABLE_LOGIN_FORM: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_EXPLORE_ENABLED: "true"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/dashboards/:/etc/grafana/provisioning/dashboards/:ro
+      - ./config/grafana/datasources/:/etc/grafana/provisioning/datasources/:ro
+    depends_on:
+      - prometheus
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
+

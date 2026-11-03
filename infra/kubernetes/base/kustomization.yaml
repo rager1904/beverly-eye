@@ -1,0 +1,43 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: healthcare
+
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - configmap.yaml
+  - secrets.yaml
+  - ingress.yaml
+  - network-policies.yaml
+  - pod-disruption-budgets.yaml
+  - ../services/api-gateway.yaml
+  - ../services/emr-service.yaml
+  - ../services/agent-orchestrator.yaml
+  - ../services/asr-service.yaml
+  - ../services/tts-service.yaml
+  - ../services/rag-service.yaml
+  - ../services/frontend.yaml
+  - ../services/celery-worker.yaml
+  - ../services/celery-beat.yaml
+  - ../services/disease-surveillance.yaml
+  - ../services/community-health.yaml
+  - ../services/medical-imaging.yaml
+  - ../services/drug-supply-chain.yaml
+  - ../services/notifications.yaml
+  - ../storage/postgres-statefulset.yaml
+  - ../storage/redis-statefulset.yaml
+  - ../storage/qdrant-statefulset.yaml
+  - ../storage/weaviate-statefulset.yaml
+  - ../storage/minio-statefulset.yaml
+  - ../storage/persistent-volume-claims.yaml
+  - ../monitoring/prometheus.yaml
+  - ../monitoring/grafana.yaml
+  - ../monitoring/alertmanager.yaml
+  - ../monitoring/service-monitors.yaml
+
+commonLabels:
+  platform: ubuntucare
+  environment: base
+  region: africa-south
+  country: zm

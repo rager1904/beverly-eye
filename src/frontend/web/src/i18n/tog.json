@@ -1,0 +1,56 @@
+{
+  "app": {
+    "name": "UbuntuCare",
+    "tagline": "Buyumu bukketwe kuli Zambia",
+    "description": "Bulayo bwa buyumu bulimvwa bobela bambelela, babaapa buyumu, amabbusena a buyumu mu Zambia"
+  },
+  "nav": {
+    "dashboard": "Dashi boardi",
+    "patients": "Babelela",
+    "appointments": "Zibelo",
+    "telemedicine": "Telemedicine",
+    "emr": "EMR",
+    "analytics": "Kusantula",
+    "publicHealth": "Buyumu Bwa Bantu Bonse",
+    "pharmacy": "Mushonga",
+    "laboratory": "Labu",
+    "settings": "Zikonzya",
+    "logout": "Fuma",
+    "profile": "Mbonyi",
+    "notifications": "Zyeelede"
+  },
+  "dashboard": {
+    "welcome": "Mwabona",
+    "todayAppointments": "Zibelo Za Leeno",
+    "patientQueue": "Mulongo Wa Babelela",
+    "activeTeleconsultations": "Matelemedicine Akubelela",
+    "recentNotes": "Zyalembwa Aciindi",
+    "criticalLabs": "Zyakabotu Zya Labu Zyayuma"
+  },
+  "auth": {
+    "login": "Njila",
+    "register": "Lembesyegwa",
+    "email": "Imeelo",
+    "password": "Jwi Lyankundu",
+    "signIn": "Njila",
+    "signUp": "Lembesyegwa"
+  },
+  "telemedicine": {
+    "startCall": "Tantika Kunwa",
+    "endCall": "Maniza Kunwa",
+    "waitingRoom": "Cipinda Cakulindila",
+    "signalQuality": "Mbupati Bwa Sigino"
+  },
+  "common": {
+    "loading": "Kutama...",
+    "error": "Cilengwa cakacitika",
+    "save": "Sungila",
+    "cancel": "Leka",
+    "delete": "Futula",
+    "edit": "Lungika",
+    "search": "Fwafwauta",
+    "submit": "Tuma",
+    "close": "Jala",
+    "noData": "Takwe data iliyonkene"
+  }
+}

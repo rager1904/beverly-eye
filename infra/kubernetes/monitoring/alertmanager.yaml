@@ -1,0 +1,244 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: alertmanager
+  namespace: healthcare
+  labels:
+    app: alertmanager
+    component: monitoring
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 9093
+      targetPort: 9093
+      protocol: TCP
+    - name: metrics
+      port: 9094
+      targetPort: 9094
+      protocol: TCP
+  selector:
+    app: alertmanager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alertmanager
+  namespace: healthcare
+  labels:
+    app: alertmanager
+    component: monitoring
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: alertmanager
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+        component: monitoring
+      annotations:
+        prometheus.io/scrape:"true"
+        prometheus.io/port:"9094"
+        prometheus.io/path:"/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.26.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9093
+              protocol: TCP
+            - name: metrics
+              containerPort: 9094
+              protocol: TCP
+          args:
+            - --config.file=/etc/alertmanager/alertmanager.yml
+            - --storage.path=/alertmanager
+            - --data.retention=120h
+            - --web.listen-address=:9093
+            - --web.external-url=https://monitor.healthcare.zm/alertmanager
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: 9093
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: 9093
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: alertmanager-config
+              mountPath: /etc/alertmanager
+            - name: alertmanager-data
+              mountPath: /alertmanager
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+      volumes:
+        - name: alertmanager-config
+          configMap:
+            name: alertmanager-config
+        - name: alertmanager-data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-config
+  namespace: healthcare
+  labels:
+    app: alertmanager
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+      slack_api_url: ""
+      smtp_from: "alerts@healthcare.zm"
+      smtp_smarthost: "smtp.sendgrid.net:587"
+      smtp_auth_username: "apikey"
+      smtp_auth_password: ""
+      smtp_require_tls: true
+
+    templates:
+      - /etc/alertmanager/templates/*.tmpl
+
+    route:
+      receiver: default-receiver
+      group_by:
+        - alertname
+        - severity
+        - service
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - receiver: pagerduty-critical
+          match:
+            severity: critical
+          repeat_interval: 1h
+        - receiver: slack-warning
+          match:
+            severity: warning
+          repeat_interval: 4h
+        - receiver: email-info
+          match:
+            severity: info
+          repeat_interval: 24h
+
+    receivers:
+      - name: default-receiver
+        email_configs:
+          - to: "ops@healthcare.zm"
+            send_resolved: true
+        slack_configs:
+          - channel: "#alerts"
+            send_resolved: true
+            title: '{{ template "slack.title" . }}'
+            text: '{{ template "slack.text" . }}'
+
+      - name: pagerduty-critical
+        email_configs:
+          - to: "oncall@healthcare.zm"
+            send_resolved: true
+        slack_configs:
+          - channel: "#critical"
+            send_resolved: true
+            title: '🚨 CRITICAL: {{ template "slack.title" . }}'
+            text: '{{ template "slack.text" . }}'
+
+      - name: slack-warning
+        slack_configs:
+          - channel: "#warnings"
+            send_resolved: true
+            title: '⚠ WARNING: {{ template "slack.title" . }}'
+            text: '{{ template "slack.text" . }}'
+
+      - name: email-info
+        email_configs:
+          - to: "team@healthcare.zm"
+            send_resolved: true
+            html: '{{ template "email.html" . }}'
+
+    inhibit_rules:
+      - source_match:
+          severity: critical
+        target_match:
+          severity: warning
+        equal:
+          - alertname
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alertmanager-templates
+  namespace: healthcare
+  labels:
+    app: alertmanager
+data:
+  slack.tmpl: |
+    {{ define "slack.title" }}
+    [{{ .Status | toUpper }}] {{ .GroupLabels.alertname }}
+    {{ end }}
+
+    {{ define "slack.text" }}
+    {{ range .Alerts }}
+    *Alert:* {{ .Annotations.summary }}
+    *Description:* {{ .Annotations.description }}
+    *Severity:* {{ .Labels.severity }}
+    *Service:* {{ .Labels.service }}
+    *Instance:* {{ .Labels.instance }}
+    *Started:* {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+    {{ end }}
+    {{ end }}
+
+  email.tmpl: |
+    {{ define "email.html" }}
+    <html>
+    <body>
+    <h2>{{ .GroupLabels.alertname }}</h2>
+    <table border="1" cellpadding="5">
+    <tr><th>Alert</th><th>Severity</th><th>Service</th><th>Summary</th></tr>
+    {{ range .Alerts }}
+    <tr>
+    <td>{{ .Labels.alertname }}</td>
+    <td>{{ .Labels.severity }}</td>
+    <td>{{ .Labels.service }}</td>
+    <td>{{ .Annotations.summary }}</td>
+    </tr>
+    {{ end }}
+    </table>
+    </body>
+    </html>
+    {{ end }}

@@ -1,0 +1,162 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: healthcare-ingress
+  namespace: healthcare
+  annotations:
+    kubernetes.io/ingress.class:nginx
+    nginx.ingress.kubernetes.io/ssl-redirect:"true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect:"true"
+    nginx.ingress.kubernetes.io/rewrite-target:/
+    nginx.ingress.kubernetes.io/proxy-body-size:"200m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout:"60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout:"300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout:"300"
+    nginx.ingress.kubernetes.io/proxy-buffering:"on"
+    nginx.ingress.kubernetes.io/proxy-buffer-size:"8k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number:"8"
+    nginx.ingress.kubernetes.io/enable-cors:"true"
+    nginx.ingress.kubernetes.io/cors-allow-origin:"https://healthcare.zm,https://*.healthcare.zm"
+    nginx.ingress.kubernetes.io/cors-allow-methods:"GET, POST, PUT, DELETE, PATCH, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers:"DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization,Content-Disposition"
+    nginx.ingress.kubernetes.io/cors-allow-credentials:"true"
+    nginx.ingress.kubernetes.io/cors-max-age:"86400"
+    nginx.ingress.kubernetes.io/limit-rps:"100"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier:"5"
+    nginx.ingress.kubernetes.io/limit-connections:"50"
+    nginx.ingress.kubernetes.io/enable-modsecurity:"true"
+    nginx.ingress.kubernetes.io/enable-owasp-core-rules:"true"
+    nginx.ingress.kubernetes.io/modsecurity-snippet:|
+      SecRuleEngine On
+      SecRequestBodyAccess On
+      SecResponseBodyAccess On
+      SecRule REQUEST_HEADERS: Content-Type "text/xml" "id:100000,phase:1,t: lowercase,deny,status:406,msg:'XML not allowed'"
+    nginx.ingress.kubernetes.io/configuration-snippet:|
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Permissions-Policy "camera=(), microphone=(), geolocation=(self), fullscreen=()" always;
+    nginx.ingress.kubernetes.io/whitelist-source-range:"0.0.0.0/0"
+    cert-manager.io/cluster-issuer:"letsencrypt-prod"
+    cert-manager.io/acme-challenge-type:http01
+spec:
+  tls:
+    - hosts:
+        - healthcare.zm
+        - api.healthcare.zm
+        - ws.healthcare.zm
+      secretName: healthcare-tls
+  rules:
+    - host: healthcare.zm
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 3000
+    - host: api.healthcare.zm
+      http:
+        paths:
+          - path: /api/v1/emr
+            pathType: Prefix
+            backend:
+              service:
+                name: emr-service
+                port:
+                  number: 8000
+          - path: /api/v1/patient-flow
+            pathType: Prefix
+            backend:
+              service:
+                name: emr-service
+                port:
+                  number: 8000
+          - path: /api/v1/agent
+            pathType: Prefix
+            backend:
+              service:
+                name: agent-orchestrator
+                port:
+                  number: 8000
+          - path: /api/v1/asr
+            pathType: Prefix
+            backend:
+              service:
+                name: asr-service
+                port:
+                  number: 8000
+          - path: /api/v1/tts
+            pathType: Prefix
+            backend:
+              service:
+                name: tts-service
+                port:
+                  number: 8000
+          - path: /api/v1/rag
+            pathType: Prefix
+            backend:
+              service:
+                name: rag-service
+                port:
+                  number: 8000
+          - path: /api/v1/surveillance
+            pathType: Prefix
+            backend:
+              service:
+                name: disease-surveillance
+                port:
+                  number: 8000
+          - path: /api/v1/community
+            pathType: Prefix
+            backend:
+              service:
+                name: community-health
+                port:
+                  number: 8000
+          - path: /api/v1/imaging
+            pathType: Prefix
+            backend:
+              service:
+                name: medical-imaging
+                port:
+                  number: 8000
+          - path: /api/v1/supply-chain
+            pathType: Prefix
+            backend:
+              service:
+                name: drug-supply-chain
+                port:
+                  number: 8000
+          - path: /api/v1/notifications
+            pathType: Prefix
+            backend:
+              service:
+                name: notifications
+                port:
+                  number: 8000
+          - path: /api/v1
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8000
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8000
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8000

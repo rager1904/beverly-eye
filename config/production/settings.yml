@@ -1,0 +1,515 @@
+# =============================================================================
+# Production Configuration — UbuntuCare (Zambia)
+# =============================================================================
+
+version: "1.0"
+environment: production
+
+# ---------------------------------------------------------------------------
+# 1. Database Connection Pools
+# ---------------------------------------------------------------------------
+database:
+  primary:
+    engine: postgresql
+    host: "${DB_PRIMARY_HOST}"
+    port: 5432
+    database: ubuntucare_prod
+    username: "${DB_PRIMARY_USER}"
+    password: "${DB_PRIMARY_PASSWORD}"
+    ssl_mode: verify-full
+    ssl_ca_path: /etc/ssl/certs/ca-certificates.crt
+    connection_pool:
+      min_size: 10
+      max_size: 50
+      max_overflow: 20
+      pool_timeout_seconds: 30
+      pool_recycle_seconds: 3600
+      pool_pre_ping: true
+      max_lifetime_seconds: 1800
+    statement_timeout_ms: 30000
+    lock_timeout_ms: 5000
+    idle_in_transaction_timeout_ms: 60000
+  replica:
+    enabled: true
+    hosts:
+      - host: "${DB_REPLICA_1_HOST}"
+        port: 5432
+        weight: 50
+      - host: "${DB_REPLICA_2_HOST}"
+        port: 5432
+        weight: 50
+    connection_pool:
+      min_size: 5
+      max_size: 20
+      max_overflow: 10
+    read_only: true
+    load_balancing: "round_robin"
+  vector:
+    engine: pgvector
+    host: "${DB_VECTOR_HOST}"
+    port: 5432
+    database: ubuntucare_prod
+    username: "${DB_VECTOR_USER}"
+    password: "${DB_VECTOR_PASSWORD}"
+    connection_pool:
+      min_size: 5
+      max_size: 15
+    hnsw_index:
+      m: 16
+      ef_construction: 200
+      ef_search: 40
+  connection_pool_monitoring:
+    enabled: true
+    alert_on_usage_percent: 80
+    alert_on_connection_errors: true
+
+# ---------------------------------------------------------------------------
+# 2. Redis Cluster Settings
+# ---------------------------------------------------------------------------
+redis:
+  mode: cluster
+  cluster_nodes:
+    - host: "${REDIS_NODE_1_HOST}"
+      port: 6379
+    - host: "${REDIS_NODE_2_HOST}"
+      port: 6379
+    - host: "${REDIS_NODE_3_HOST}"
+      port: 6379
+    - host: "${REDIS_NODE_4_HOST}"
+      port: 6379
+    - host: "${REDIS_NODE_5_HOST}"
+      port: 6379
+    - host: "${REDIS_NODE_6_HOST}"
+      port: 6379
+  password: "${REDIS_PASSWORD}"
+  ssl: true
+  timeout_seconds: 5
+  socket_connect_timeout_ms: 2000
+  socket_keepalive: true
+  retry_on_timeout: true
+  max_connections: 50
+  key_prefix: "prod:"
+  databases:
+    cache:
+      db: 0
+      max_memory_mb: 2048
+      eviction_policy: allkeys-lfu
+      ttl_default_seconds: 3600
+    session:
+      db: 1
+      max_memory_mb: 1024
+      eviction_policy: allkeys-lru
+      ttl_default_seconds: 86400
+    queue:
+      db: 2
+      max_memory_mb: 4096
+      eviction_policy: noeviction
+    rate_limit:
+      db: 3
+      max_memory_mb: 512
+      eviction_policy: allkeys-lru
+    pubsub:
+      db: 4
+      max_memory_mb: 256
+    vector_cache:
+      db: 5
+      max_memory_mb: 2048
+      eviction_policy: allkeys-lfu
+  sentinel:
+    enabled: true
+    masters:
+      - name: primary
+        hosts:
+          - host: "${REDIS_SENTINEL_1_HOST}"
+            port: 26379
+          - host: "${REDIS_SENTINEL_2_HOST}"
+            port: 26379
+          - host: "${REDIS_SENTINEL_3_HOST}"
+            port: 26379
+
+# ---------------------------------------------------------------------------
+# 3. Model Serving Configuration
+# ---------------------------------------------------------------------------
+model_serving:
+  inference_server: vllm
+  vllm_config:
+    max_num_batched_tokens: 8192
+    max_num_seqs: 256
+    gpu_memory_utilization: 0.90
+    swap_space_bytes: 4294967296
+    max_model_len: 65536
+    enforce_eager: false
+    enable_prefix_caching: true
+    enable_chunked_prefill: true
+    scheduler_type: simple
+  model_registry:
+    storage_type: s3
+    s3_bucket: "${MODEL_BUCKET}"
+    s3_region: "${AWS_REGION}"
+    local_cache_path: /data/models/cache
+    cache_size_gb: 200
+    allowed_models:
+      - qwen3-32b-awq-int4
+      - qwen3-8b-awq-int4
+      - whisper-large-v3
+      - whisper-medium
+      - whisper-small
+      - stella-400m-v5
+      - piper-multilingual
+      - biobert-ner
+      - vit-lung-xray
+    download_concurrency: 4
+    verify_checksums: true
+  model_replicas:
+    qwen3_32b:
+      min_replicas: 2
+      max_replicas: 8
+      target_gpu_utilization: 0.80
+      scale_up_threshold_rps: 10
+      scale_down_threshold_rps: 3
+    whisper_large:
+      min_replicas: 2
+      max_replicas: 6
+      target_gpu_utilization: 0.75
+
+# ---------------------------------------------------------------------------
+# 4. GPU Sharing Configuration
+# ---------------------------------------------------------------------------
+gpu_sharing:
+  framework: "mps"
+  mps_config:
+    default_volatile_percent: 100
+    dedicated_memory_per_process: false
+    pipe_size_gb: 4
+  sharing_policy:
+    default: "time_slicing"
+    time_slicing:
+      interval_ms: 100
+      fair_scheduling: true
+    mig:
+      enabled: false
+      requires_a100_or_h100: true
+  per_gpu_process_limit: 8
+  memory_overcommit_protection: true
+  gpu_monitoring:
+    enabled: true
+    poll_interval_seconds: 10
+    metrics_port: 9100
+
+# ---------------------------------------------------------------------------
+# 5. Horizontal Scaling Configuration
+# ---------------------------------------------------------------------------
+scaling:
+  strategy: "horizontal"
+  auto_scaling:
+    enabled: true
+    provider: "kubernetes"
+    min_instances: 3
+    max_instances: 20
+    metrics:
+      - type: "cpu"
+        target_utilization_percent: 70
+      - type: "memory"
+        target_utilization_percent: 75
+      - type: "requests_per_second"
+        target_value: 100
+      - type: "gpu_utilization"
+        target_value_percent: 80
+    scale_up_cooldown_seconds: 120
+    scale_down_cooldown_seconds: 300
+  service_mesh:
+    enabled: true
+    provider: "istio"
+    mtls: true
+    circuit_breaker:
+      enabled: true
+      max_connections: 1000
+      max_pending_requests: 500
+      max_requests_per_connection: 100
+      max_retries: 3
+    load_balancing:
+      algorithm: "least_request"
+      locality_weighted: true
+  session_affinity:
+    enabled: true
+    cookie_name: "ah_session"
+    max_lifetime_hours: 24
+
+# ---------------------------------------------------------------------------
+# 6. CDN Configuration
+# ---------------------------------------------------------------------------
+cdn:
+  provider: "cloudflare"
+  zone_id: "${CDN_ZONE_ID}"
+  api_token: "${CDN_API_TOKEN}"
+  caching:
+    static_assets:
+      ttl_seconds: 31536000
+      query_string_ignore: true
+    api_responses:
+      ttl_seconds: 60
+      cache_methods: ["GET", "HEAD"]
+    model_outputs:
+      ttl_seconds: 300
+      vary_by: ["model_id", "input_hash"]
+    medical_images:
+      ttl_seconds: 3600
+      vary_by: ["patient_id"]
+      cache_by_device: true
+  compression:
+    enabled: true
+    brotli: true
+    gzip: true
+    min_size_bytes: 1024
+  image_optimization:
+    enabled: true
+    formats: ["webp", "avif"]
+    quality: 80
+  ddos_protection:
+    enabled: true
+    rate_per_second_threshold: 5000
+
+# ---------------------------------------------------------------------------
+# 7. Backup Configuration
+# ---------------------------------------------------------------------------
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  timezone: "Africa/Lusaka"
+  storage:
+    provider: "s3"
+    bucket: "${BACKUP_BUCKET}"
+    region: "${AWS_REGION}"
+    prefix: "backups/production"
+    lifecycle_days: 90
+  types:
+    full:
+      schedule: "0 2 * * 0"
+      retention_days: 30
+      compress: true
+      encrypt: true
+    incremental:
+      schedule: "0 2 * * 1-6"
+      retention_days: 7
+      compress: true
+      encrypt: true
+    wal:
+      schedule: "*/15 * * * *"
+      retention_days: 3
+      compress: true
+      encrypt: true
+  verification:
+    enabled: true
+    restore_test_schedule: "0 4 * * 0"
+    test_database: ubuntucare_backup_test
+  point_in_time_recovery:
+    enabled: true
+    wal_archive_path: "/data/wal_archive"
+    retention_days: 7
+
+# ---------------------------------------------------------------------------
+# 8. Monitoring Thresholds
+# ---------------------------------------------------------------------------
+monitoring:
+  metrics:
+    enabled: true
+    export_port: 9090
+    path: "/metrics"
+  thresholds:
+    cpu:
+      warning_percent: 70
+      critical_percent: 85
+      evaluation_window_minutes: 5
+    memory:
+      warning_percent: 75
+      critical_percent: 90
+      evaluation_window_minutes: 5
+    disk:
+      warning_percent: 75
+      critical_percent: 85
+      evaluation_window_minutes: 10
+      path: "/data"
+    gpu:
+      warning_utilization_percent: 80
+      critical_utilization_percent: 95
+      warning_memory_percent: 80
+      critical_memory_percent: 95
+      evaluation_window_minutes: 5
+      temperature_warning_c: 80
+      temperature_critical_c: 90
+    api:
+      p95_latency_warning_ms: 500
+      p95_latency_critical_ms: 2000
+      error_rate_warning_percent: 1
+      error_rate_critical_percent: 5
+      requests_per_second_warning: 500
+      requests_per_second_critical: 1000
+    database:
+      connection_pool_usage_warning_percent: 70
+      connection_pool_usage_critical_percent: 85
+      query_latency_warning_ms: 200
+      query_latency_critical_ms: 1000
+      replication_lag_warning_bytes: 104857600
+      replication_lag_critical_bytes: 536870912
+    sync:
+      pending_entries_warning: 10000
+      pending_entries_critical: 50000
+      sync_lag_warning_minutes: 60
+      sync_lag_critical_minutes: 360
+      device_offline_warning_minutes: 120
+      device_offline_critical_hours: 24
+    model:
+      inference_latency_warning_ms: 1000
+      inference_latency_critical_ms: 5000
+      prediction_drift_warning: 0.1
+      prediction_drift_critical: 0.25
+      model_reload_failures_threshold: 3
+
+# ---------------------------------------------------------------------------
+# 9. Alert Channels
+# ---------------------------------------------------------------------------
+alerting:
+  alertmanager_url: "http://alertmanager:9093"
+  channels:
+    sms:
+      enabled: true
+      provider: "africastalking"
+      api_key: "${AFRICASTALKING_API_KEY}"
+      username: "${AFRICASTALKING_USERNAME}"
+      from: "UbuntuCare"
+      recipients:
+        - "+260977000001"
+        - "+260977000002"
+      rate_limit_per_minute: 10
+      escalation:
+        warning: true
+        critical: true
+    email:
+      enabled: true
+      smtp_host: "${SMTP_HOST}"
+      smtp_port: 587
+      smtp_username: "${SMTP_USERNAME}"
+      smtp_password: "${SMTP_PASSWORD}"
+      smtp_tls: true
+      from: "alerts@ubuntucare.gov.zm"
+      recipients:
+        - "it-support@moh.gov.zm"
+        - "oncall@ubuntucare.gov.zm"
+      rate_limit_per_hour: 60
+    slack:
+      enabled: true
+      webhook_url: "${SLACK_WEBHOOK_URL}"
+      channel: "#healthcare-alerts"
+      username: "UbuntuCare Bot"
+      icon_emoji: ": hospital:"
+      notify_on:
+        - warning
+        - critical
+        - resolved
+    pagerduty:
+      enabled: true
+      integration_key: "${PAGERDUTY_KEY}"
+      severity_mapping:
+        warning: warning
+        critical: critical
+  escalation_policy:
+    warning:
+      notify_after_minutes: 10
+      repeat_interval_minutes: 60
+      max_notifications: 3
+    critical:
+      notify_after_minutes: 2
+      repeat_interval_minutes: 15
+      max_notifications: 10
+      escalate_after_minutes: 30
+      escalate_to: "oncall_manager"
+
+# ---------------------------------------------------------------------------
+# 10. Rate Limiting Thresholds
+# ---------------------------------------------------------------------------
+rate_limiting:
+  enabled: true
+  backend: "redis"
+  strategy: "sliding_window"
+  default_limit:
+    requests: 100
+    window_seconds: 60
+  per_endpoint:
+    "/api/v1/auth/login":requests: 10
+      window_seconds: 60
+      ban_after_attempts: 5
+      ban_duration_minutes: 30
+    "/api/v1/patients":requests: 60
+      window_seconds: 60
+    "/api/v1/patients/search":requests: 30
+      window_seconds: 60
+    "/api/v1/sync/upload":requests: 20
+      window_seconds: 60
+      burst: 50
+    "/api/v1/sync/download":requests: 30
+      window_seconds: 60
+      burst: 100
+    "/api/v1/inference/llm":requests: 10
+      window_seconds: 60
+    "/api/v1/inference/asr":requests: 5
+      window_seconds: 60
+      max_audio_seconds_per_minute: 300
+    "/api/v1/inference/tts":requests: 10
+      window_seconds: 60
+      max_text_chars_per_minute: 10000
+    "/api/v1/reports":requests: 5
+      window_seconds: 60
+    "/api/v1/admin":requests: 30
+      window_seconds: 60
+  per_user_limits:
+    enabled: true
+    default_limit_multiplier: 1.0
+    admin_multiplier: 5.0
+    api_client_multiplier: 10.0
+  per_device_limits:
+    enabled: true
+    default_limit_multiplier: 1.0
+    device_type_multipliers:
+      server: 5.0
+      edge: 2.0
+      mobile: 0.5
+  global_rate_limit:
+    max_concurrent_requests: 500
+    max_concurrent_syncs: 100
+    max_model_inferences_per_second: 50
+  response_headers:
+    enabled: true
+    standard_headers:
+      - "X-RateLimit-Limit"
+      - "X-RateLimit-Remaining"
+      - "X-RateLimit-Reset"
+    retry_after_header: true
+
+# ---------------------------------------------------------------------------
+# 11. Security
+# ---------------------------------------------------------------------------
+security:
+  cors:
+    allowed_origins:
+      - "https://*.ubuntucare.gov.zm"
+      - "https://*.moh.gov.zm"
+    allowed_methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
+    allowed_headers: ["Authorization", "Content-Type", "X-Device-Key", "X-Idempotency-Key"]
+    expose_headers: ["X-Request-Id"]
+    max_age_seconds: 3600
+    allow_credentials: true
+  jwt:
+    issuer: "ubuntucare-auth"
+    access_token_ttl_minutes: 30
+    refresh_token_ttl_days: 30
+    algorithm: RS256
+    public_key_path: /etc/ssl/jwt/public.pem
+    private_key_path: /etc/ssl/jwt/private.pem
+    rotation_enabled: true
+    rotation_interval_days: 90
+  encryption:
+    at_rest: true
+    in_transit: true
+    tls_min_version: "TLSv1.3"
+    hsm_provider: "azure-keyvault"
+    key_rotation_days: 90

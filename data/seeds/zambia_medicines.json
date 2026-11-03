@@ -1,0 +1,195 @@
+{
+  "schema_version": "1.0",
+  "country": "Zambia",
+  "source": "Zambia Essential Medicines List (EML) 2023 - adapted from WHO EML",
+  "categories": [
+    {
+      "name": "Antimalarials",
+      "code": "ANTIMALARIAL",
+      "medicines": [
+        {"code": "ART001", "name": "Artemether + Lumefantrine 20/120mg", "form": "Tablet", "strength": "20mg+120mg", "level": "facility"},
+        {"code": "ART002", "name": "Artesunate 60mg injection", "form": "Injection", "strength": "60mg", "level": "hospital"},
+        {"code": "ART003", "name": "Artesunate 50mg suppository", "form": "Suppository", "strength": "50mg", "level": "facility"},
+        {"code": "ART004", "name": "Artemether 80mg injection", "form": "Injection", "strength": "80mg/ml", "level": "hospital"},
+        {"code": "ART005", "name": "Chloroquine 150mg base tablet", "form": "Tablet", "strength": "150mg", "level": "facility"},
+        {"code": "ART006", "name": "Primaquine 7.5mg tablet", "form": "Tablet", "strength": "7.5mg", "level": "facility"},
+        {"code": "ART007", "name": "Quinine 300mg tablet", "form": "Tablet", "strength": "300mg", "level": "facility"},
+        {"code": "ART008", "name": "Quinine 300mg/ml injection", "form": "Injection", "strength": "300mg/ml", "level": "hospital"},
+        {"code": "ART009", "name": "Sulfadoxine + Pyrimethamine 500/25mg", "form": "Tablet", "strength": "500mg+25mg", "level": "facility"},
+        {"code": "ART010", "name": "Doxycycline 100mg capsule", "form": "Capsule", "strength": "100mg", "level": "facility"}
+      ]
+    },
+    {
+      "name": "Antiretrovirals",
+      "code": "ARV",
+      "medicines": [
+        {"code": "HIV001", "name": "Tenofovir + Lamivudine + Dolutegravir (TLD)", "form": "Tablet", "strength": "300mg+300mg+50mg", "level": "facility"},
+        {"code": "HIV002", "name": "Tenofovir + Lamivudine (TL)", "form": "Tablet", "strength": "300mg+300mg", "level": "facility"},
+        {"code": "HIV003", "name": "Zidovudine + Lamivudine (AZT+3TC)", "form": "Tablet", "strength": "300mg+150mg", "level": "facility"},
+        {"code": "HIV004", "name": "Efavirenz 600mg tablet", "form": "Tablet", "strength": "600mg", "level": "facility"},
+        {"code": "HIV005", "name": "Nevirapine 200mg tablet", "form": "Tablet", "strength": "200mg", "level": "facility"},
+        {"code": "HIV006", "name": "Lopinavir + Ritonavir 100/25mg", "form": "Tablet", "strength": "100mg+25mg", "level": "hospital"},
+        {"code": "HIV007", "name": "Abacavir 300mg tablet", "form": "Tablet", "strength": "300mg", "level": "hospital"},
+        {"code": "HIV008", "name": "Dolutegravir 50mg tablet", "form": "Tablet", "strength": "50mg", "level": "facility"},
+        {"code": "HIV009", "name": "Zidovudine syrup 10mg/ml", "form": "Syrup", "strength": "10mg/ml", "level": "facility"},
+        {"code": "HIV010", "name": "Nevirapine syrup 10mg/ml", "form": "Syrup", "strength": "10mg/ml", "level": "facility"}
+      ]
+    },
+    {
+      "name": "Antituberculosis",
+      "code": "TB",
+      "medicines": [
+        {"code": "TB001", "name": "Rifampicin+Isoniazid+Pyrazinamide+Ethambutol (RHZE)", "form": "Tablet", "strength": "150mg+75mg+400mg+275mg", "level": "facility"},
+        {"code": "TB002", "name": "Rifampicin + Isoniazid (RH)", "form": "Tablet", "strength": "150mg+75mg", "level": "facility"},
+        {"code": "TB003", "name": "Isoniazid 300mg tablet", "form": "Tablet", "strength": "300mg", "level": "facility"},
+        {"code": "TB004", "name": "Rifampicin 150mg capsule", "form": "Capsule", "strength": "150mg", "level": "facility"},
+        {"code": "TB005", "name": "Ethambutol 400mg tablet", "form": "Tablet", "strength": "400mg", "level": "facility"},
+        {"code": "TB006", "name": "Pyrazinamide 400mg tablet", "form": "Tablet", "strength": "400mg", "level": "facility"},
+        {"code": "TB007", "name": "Streptomycin 1g injection", "form": "Injection", "strength": "1g", "level": "hospital"},
+        {"code": "TB008", "name": "Bedaquiline 100mg tablet", "form": "Tablet", "strength": "100mg", "level": "hospital"},
+        {"code": "TB009", "name": "Delamanid 50mg tablet", "form": "Tablet", "strength": "50mg", "level": "hospital"},
+        {"code": "TB010", "name": "Linezolid 600mg tablet", "form": "Tablet", "strength": "600mg", "level": "hospital"}
+      ]
+    },
+    {
+      "name": "Antibiotics",
+      "code": "ANTIBIOTIC",
+      "medicines": [
+        {"code": "ABX001", "name": "Amoxicillin 250mg capsule", "form": "Capsule", "strength": "250mg", "level": "facility"},
+        {"code": "ABX002", "name": "Amoxicillin 500mg capsule", "form": "Capsule", "strength": "500mg", "level": "facility"},
+        {"code": "ABX003", "name": "Amoxicillin suspension 125mg/5ml", "form": "Suspension", "strength": "125mg/5ml", "level": "facility"},
+        {"code": "ABX004", "name": "Amoxicillin + Clavulanic acid 625mg", "form": "Tablet", "strength": "500mg+125mg", "level": "hospital"},
+        {"code": "ABX005", "name": "Ceftriaxone 1g injection", "form": "Injection", "strength": "1g", "level": "hospital"},
+        {"code": "ABX006", "name": "Ciprofloxacin 500mg tablet", "form": "Tablet", "strength": "500mg", "level": "facility"},
+        {"code": "ABX007", "name": "Azithromycin 500mg tablet", "form": "Tablet", "strength": "500mg", "level": "facility"},
+        {"code": "ABX008", "name": "Metronidazole 400mg tablet", "form": "Tablet", "strength": "400mg", "level": "facility"},
+        {"code": "ABX009", "name": "Gentamicin 80mg injection", "form": "Injection", "strength": "80mg/2ml", "level": "hospital"},
+        {"code": "ABX010", "name": "Penicillin V 250mg tablet", "form": "Tablet", "strength": "250mg", "level": "facility"},
+        {"code": "ABX011", "name": "Cloxacillin 500mg capsule", "form": "Capsule", "strength": "500mg", "level": "facility"},
+        {"code": "ABX012", "name": "Doxycycline 100mg capsule", "form": "Capsule", "strength": "100mg", "level": "facility"},
+        {"code": "ABX013", "name": "Erythromycin 250mg tablet", "form": "Tablet", "strength": "250mg", "level": "facility"},
+        {"code": "ABX014", "name": "Nitrofurantoin 100mg capsule", "form": "Capsule", "strength": "100mg", "level": "facility"},
+        {"code": "ABX015", "name": "Sulfamethoxazole+Trimethoprim 400/80mg", "form": "Tablet", "strength": "400mg+80mg", "level": "facility"},
+        {"code": "ABX016", "name": "Chloramphenicol 250mg capsule", "form": "Capsule", "strength": "250mg", "level": "facility"},
+        {"code": "ABX017", "name": "Chloramphenicol eye drops 0.5%", "form": "Eye Drops", "strength": "0.5%", "level": "facility"},
+        {"code": "ABX018", "name": "Tetracycline eye ointment 1%", "form": "Eye Ointment", "strength": "1%", "level": "facility"}
+      ]
+    },
+    {
+      "name": "Cardiovascular",
+      "code": "CARDIOVASCULAR",
+      "medicines": [
+        {"code": "CVD001", "name": "Amlodipine 5mg tablet", "form": "Tablet", "strength": "5mg", "level": "facility"},
+        {"code": "CVD002", "name": "Amlodipine 10mg tablet", "form": "Tablet", "strength": "10mg", "level": "facility"},
+        {"code": "CVD003", "name": "Enalapril 5mg tablet", "form": "Tablet", "strength": "5mg", "level": "facility"},
+        {"code": "CVD004", "name": "Enalapril 10mg tablet", "form": "Tablet", "strength": "10mg", "level": "facility"},
+        {"code": "CVD005", "name": "Hydrochlorothiazide 25mg tablet", "form": "Tablet", "strength": "25mg", "level": "facility"},
+        {"code": "CVD006", "name": "Furosemide 40mg tablet", "form": "Tablet", "strength": "40mg", "level": "facility"},
+        {"code": "CVD007", "name": "Digoxin 0.25mg tablet", "form": "Tablet", "strength": "0.25mg", "level": "hospital"},
+        {"code": "CVD008", "name": "Aspirin 75mg tablet", "form": "Tablet", "strength": "75mg", "level": "facility"},
+        {"code": "CVD009", "name": "Aspirin 300mg tablet", "form": "Tablet", "strength": "300mg", "level": "facility"},
+        {"code": "CVD010", "name": "Atorvastatin 10mg tablet", "form": "Tablet", "strength": "10mg", "level": "hospital"},
+        {"code": "CVD011", "name": "Metoprolol 50mg tablet", "form": "Tablet", "strength": "50mg", "level": "hospital"},
+        {"code": "CVD012", "name": "Nifedipine 10mg capsule", "form": "Capsule", "strength": "10mg", "level": "facility"}
+      ]
+    },
+    {
+      "name": "Respiratory",
+      "code": "RESPIRATORY",
+      "medicines": [
+        {"code": "RES001", "name": "Salbutamol inhaler 100mcg", "form": "Inhaler", "strength": "100mcg/dose", "level": "facility"},
+        {"code": "RES002", "name": "Salbutamol 4mg tablet", "form": "Tablet", "strength": "4mg", "level": "facility"},
+        {"code": "RES003", "name": "Beclometasone inhaler 100mcg", "form": "Inhaler", "strength": "100mcg/dose", "level": "hospital"},
+        {"code": "RES004", "name": "Prednisolone 5mg tablet", "form": "Tablet", "strength": "5mg", "level": "facility"},
+        {"code": "RES005", "name": "Aminophylline 100mg tablet", "form": "Tablet", "strength": "100mg", "level": "facility"},
+        {"code": "RES006", "name": "Dexamethasone 4mg injection", "form": "Injection", "strength": "4mg/ml", "level": "hospital"}
+      ]
+    },
+    {
+      "name": "Gastrointestinal / Nutrition",
+      "code": "GI_NUTRITION",
+      "medicines": [
+        {"code": "GIS001", "name": "Omeprazole 20mg capsule", "form": "Capsule", "strength": "20mg", "level": "facility"},
+        {"code": "GIS002", "name": "Ranitidine 150mg tablet", "form": "Tablet", "strength": "150mg", "level": "facility"},
+        {"code": "GIS003", "name": "Oral Rehydration Salts (ORS)", "form": "Powder", "strength": "27.9g/L", "level": "facility"},
+        {"code": "GIS004", "name": "Zinc sulfate 20mg tablet", "form": "Tablet", "strength": "20mg", "level": "facility"},
+        {"code": "GIS005", "name": "Albendazole 400mg tablet", "form": "Tablet", "strength": "400mg", "level": "facility"},
+        {"code": "GIS006", "name": "Mebendazole 500mg tablet", "form": "Tablet", "strength": "500mg", "level": "facility"},
+        {"code": "GIS007", "name": "Mebendazole suspension 100mg/5ml", "form": "Suspension", "strength": "100mg/5ml", "level": "facility"},
+        {"code": "GIS008", "name": "Hyoscine butylbromide 10mg", "form": "Tablet", "strength": "10mg", "level": "facility"},
+        {"code": "GIS009", "name": "Loperamide 2mg capsule", "form": "Capsule", "strength": "2mg", "level": "facility"},
+        {"code": "GIS010", "name": "Bisacodyl 5mg tablet", "form": "Tablet", "strength": "5mg", "level": "facility"},
+        {"code": "GIS011", "name": "Metoclopramide 10mg tablet", "form": "Tablet", "strength": "10mg", "level": "facility"},
+        {"code": "GIS012", "name": "Vitamin A 200,000 IU capsule", "form": "Capsule", "strength": "200,000 IU", "level": "facility"}
+      ]
+    },
+    {
+      "name": "CNS / Analgesics",
+      "code": "CNS_ANALGESIC",
+      "medicines": [
+        {"code": "CNS001", "name": "Paracetamol 500mg tablet", "form": "Tablet", "strength": "500mg", "level": "facility"},
+        {"code": "CNS002", "name": "Paracetamol syrup 120mg/5ml", "form": "Syrup", "strength": "120mg/5ml", "level": "facility"},
+        {"code": "CNS003", "name": "Ibuprofen 400mg tablet", "form": "Tablet", "strength": "400mg", "level": "facility"},
+        {"code": "CNS004", "name": "Diclofenac 50mg tablet", "form": "Tablet", "strength": "50mg", "level": "facility"},
+        {"code": "CNS005", "name": "Morphine 10mg injection", "form": "Injection", "strength": "10mg/ml", "level": "hospital"},
+        {"code": "CNS006", "name": "Pethidine 50mg injection", "form": "Injection", "strength": "50mg/ml", "level": "hospital"},
+        {"code": "CNS007", "name": "Diazepam 5mg tablet", "form": "Tablet", "strength": "5mg", "level": "facility"},
+        {"code": "CNS008", "name": "Diazepam 10mg injection", "form": "Injection", "strength": "10mg/2ml", "level": "hospital"},
+        {"code": "CNS009", "name": "Phenobarbital 30mg tablet", "form": "Tablet", "strength": "30mg", "level": "facility"},
+        {"code": "CNS010", "name": "Carbamazepine 200mg tablet", "form": "Tablet", "strength": "200mg", "level": "facility"},
+        {"code": "CNS011", "name": "Sodium valproate 200mg tablet", "form": "Tablet", "strength": "200mg", "level": "facility"},
+        {"code": "CNS012", "name": "Amitriptyline 25mg tablet", "form": "Tablet", "strength": "25mg", "level": "facility"},
+        {"code": "CNS013", "name": "Fluoxetine 20mg capsule", "form": "Capsule", "strength": "20mg", "level": "facility"},
+        {"code": "CNS014", "name": "Haloperidol 5mg tablet", "form": "Tablet", "strength": "5mg", "level": "hospital"},
+        {"code": "CNS015", "name": "Chlorpromazine 100mg tablet", "form": "Tablet", "strength": "100mg", "level": "facility"}
+      ]
+    },
+    {
+      "name": "Endocrine / Diabetes",
+      "code": "ENDOCRINE",
+      "medicines": [
+        {"code": "END001", "name": "Metformin 500mg tablet", "form": "Tablet", "strength": "500mg", "level": "facility"},
+        {"code": "END002", "name": "Metformin 850mg tablet", "form": "Tablet", "strength": "850mg", "level": "facility"},
+        {"code": "END003", "name": "Glibenclamide 5mg tablet", "form": "Tablet", "strength": "5mg", "level": "facility"},
+        {"code": "END004", "name": "Insulin NPH 100IU/ml", "form": "Injection", "strength": "100IU/ml", "level": "hospital"},
+        {"code": "END005", "name": "Insulin Regular 100IU/ml", "form": "Injection", "strength": "100IU/ml", "level": "hospital"},
+        {"code": "END006", "name": "Levothyroxine 50mcg tablet", "form": "Tablet", "strength": "50mcg", "level": "hospital"}
+      ]
+    },
+    {
+      "name": "Obstetric / Maternal Health",
+      "code": "OBSTETRIC",
+      "medicines": [
+        {"code": "OBS001", "name": "Oxytocin 10IU injection", "form": "Injection", "strength": "10IU/ml", "level": "facility"},
+        {"code": "OBS002", "name": "Misoprostol 200mcg tablet", "form": "Tablet", "strength": "200mcg", "level": "facility"},
+        {"code": "OBS003", "name": "Magnesium sulfate 50% injection", "form": "Injection", "strength": "50%", "level": "hospital"},
+        {"code": "OBS004", "name": "Ergometrine 0.5mg injection", "form": "Injection", "strength": "0.5mg/ml", "level": "facility"},
+        {"code": "OBS005", "name": "Ferrous sulfate + Folic acid tablet", "form": "Tablet", "strength": "200mg+400mcg", "level": "facility"},
+        {"code": "OBS006", "name": "Folic acid 5mg tablet", "form": "Tablet", "strength": "5mg", "level": "facility"},
+        {"code": "OBS007", "name": "Calcium carbonate 500mg tablet", "form": "Tablet", "strength": "500mg", "level": "facility"},
+        {"code": "OBS008", "name": "Benzathine penicillin 2.4MU injection", "form": "Injection", "strength": "2.4MU", "level": "facility"}
+      ]
+    },
+    {
+      "name": "Fluids / Electrolytes",
+      "code": "FLUIDS",
+      "medicines": [
+        {"code": "FLU001", "name": "Ringers Lactate 500ml", "form": "Infusion", "strength": "500ml", "level": "facility"},
+        {"code": "FLU002", "name": "Normal Saline 0.9% 500ml", "form": "Infusion", "strength": "500ml", "level": "facility"},
+        {"code": "FLU003", "name": "Dextrose 5% 500ml", "form": "Infusion", "strength": "5%", "level": "facility"},
+        {"code": "FLU004", "name": "Dextrose 50% 50ml injection", "form": "Injection", "strength": "50%", "level": "hospital"},
+        {"code": "FLU005", "name": "Potassium chloride 15% 10ml", "form": "Injection", "strength": "15%", "level": "hospital"}
+      ]
+    },
+    {
+      "name": "Vitamins / Supplements",
+      "code": "VITAMIN",
+      "medicines": [
+        {"code": "VIT001", "name": "Multivitamin tablet", "form": "Tablet", "strength": "multivitamin", "level": "facility"},
+        {"code": "VIT002", "name": "Vitamin B complex tablet", "form": "Tablet", "strength": "B complex", "level": "facility"},
+        {"code": "VIT003", "name": "Vitamin C 100mg tablet", "form": "Tablet", "strength": "100mg", "level": "facility"},
+        {"code": "VIT004", "name": "Vitamin D 400IU capsule", "form": "Capsule", "strength": "400IU", "level": "facility"}
+      ]
+    }
+  ]
+}

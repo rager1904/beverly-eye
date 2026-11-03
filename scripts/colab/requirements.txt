@@ -11,6 +11,8 @@ psycopg2-binary==2.9.10
 alembic==1.14.0
 redis[hiredis]==5.2.1
 celery[redis]==5.4.0
+# Keep Celery's Redis transport compatible with the pinned redis-py client.
+kombu==5.4.2
 # Kombu Redis transport imports packaging.version at runtime.
 packaging==24.2
 python-jose[cryptography]>=3.4,<4

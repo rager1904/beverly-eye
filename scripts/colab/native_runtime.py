@@ -259,7 +259,10 @@ class ColabRuntime:
         self.run([self.python, '-m', 'pip', 'install', '-r', HERE / 'requirements.txt'], 'python-dependencies')
         if self.enable_ai:
             self.run([self.python, '-m', 'pip', 'install', '-r', HERE / 'requirements.ai.txt'], 'python-ai-dependencies')
-        self.run([self.python, '-c', 'import packaging.version; import kombu.transport.redis'],
+        self.run([self.python, '-c',
+                  'import packaging.version; from types import SimpleNamespace; '
+                  'from kombu.transport.redis import Channel; '
+                  'Channel._get_client(SimpleNamespace(global_keyprefix=""))'],
                  'worker-dependencies-check')
         packages = self.root / 'downloads'
         packages.mkdir(exist_ok=True)

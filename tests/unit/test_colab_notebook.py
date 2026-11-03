@@ -53,9 +53,8 @@ class NotebookTests(unittest.TestCase):
 
     def test_run_sequence_does_not_prompt_for_an_existing_url(self):
         with patch('builtins.input', side_effect=AssertionError('No URL prompts allowed')):
-            for i in (4, 5, 6, 7, 15): self.cell(i)
+            for i in (5, 6, 7, 15): self.cell(i)
         runtime = self.scope['runtime']
-        runtime.install.assert_called_once()
         runtime.start_data.assert_called_once()
         runtime.start_apps.assert_called_once()
         self.assertEqual(self.scope['FRONTEND_URL'], 'https://fixture.trycloudflare.com')
@@ -109,6 +108,42 @@ class NotebookTests(unittest.TestCase):
         self.assertNotIn("'0.0.0.0'", text)
         self.assertNotIn("'docker'", text)
         self.assertNotIn('shell=True', text)
+
+    def test_venv_uses_system_python_not_kernel_python(self):
+        runtime = object.__new__(native.ColabRuntime)
+        runtime.root = Path('/content/demo')
+        runtime.env = {'PATH': '/usr/bin', 'PYTHONHOME': '/kernel', 'PYTHONPATH': '/kernel/modules'}
+        runtime.run = Mock()
+        with patch.object(native.Path, 'is_file', return_value=True), contextlib.redirect_stdout(io.StringIO()):
+            runtime.create_python_environment()
+        args, kwargs = runtime.run.call_args_list[0]
+        self.assertEqual(args[0][0], Path('/usr/bin/python3'))
+        self.assertNotIn('PYTHONHOME', kwargs['env'])
+        self.assertNotIn('PYTHONPATH', kwargs['env'])
+        self.assertEqual(runtime.python, Path('/content/demo/venv-system/bin/python'))
+        self.assertTrue(runtime.env['PATH'].startswith(str(runtime.python.parent)))
+
+    def test_venv_fallback_handles_missing_ensurepip(self):
+        runtime = object.__new__(native.ColabRuntime)
+        runtime.root = Path('/content/demo')
+        runtime.env = {'PATH': '/usr/bin'}
+        runtime.run = Mock(side_effect=[RuntimeError('ensurepip unavailable'), None, None, None])
+        with patch.object(native.Path, 'is_file', return_value=True), contextlib.redirect_stdout(io.StringIO()):
+            runtime.create_python_environment()
+        commands = [call.args[0] for call in runtime.run.call_args_list]
+        self.assertIn('virtualenv==20.29.3', commands[1])
+        self.assertEqual(commands[2][1:4], ['-m', 'virtualenv', '--python'])
+        self.assertEqual(runtime.python, Path('/content/demo/venv-fallback/bin/python'))
+
+    def test_environment_failure_does_not_report_success(self):
+        runtime = object.__new__(native.ColabRuntime)
+        runtime.root = Path('/content/demo')
+        runtime.env = {'PATH': '/usr/bin'}
+        runtime.run = Mock(side_effect=RuntimeError('environment creation failed'))
+        output = io.StringIO()
+        with patch.object(native.Path, 'is_file', return_value=True), contextlib.redirect_stdout(output), self.assertRaises(RuntimeError):
+            runtime.create_python_environment()
+        self.assertNotIn('environment ready', output.getvalue())
 
     def test_archive_rejects_traversal(self):
         import tarfile

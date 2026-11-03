@@ -89,11 +89,12 @@ class ColabRuntime:
         self.logs.mkdir(mode=0o700, exist_ok=True)
         self.processes = {}
         self.env = os.environ.copy()
+        self.env.pop('PYTHONHOME', None)
         self.env.update(PYTHONPATH=str(REPO), PYTHONUNBUFFERED='1', OMP_NUM_THREADS='2', TOKENIZERS_PARALLELISM='false')
-        self.python = self.root / 'venv/bin/python'
+        self.python = self.root / 'venv-system/bin/python'
         self.frontend_url = None
         tools = self.root / 'tools'
-        self.env['PATH'] = f'{tools}/node-v20.19.0-linux-x64/bin:{tools}/go/bin:{self.root}/venv/bin:' + self.env['PATH']
+        self.env['PATH'] = f'{tools}/node-v20.19.0-linux-x64/bin:{tools}/go/bin:{self.python.parent}:' + self.env['PATH']
         self.env['GOPATH'] = str(self.root / 'go-cache')
         secret_file = self.root / 'secrets.json'
         if secret_file.exists():
@@ -143,7 +144,16 @@ class ColabRuntime:
             result = subprocess.run([str(a) for a in args], cwd=cwd or REPO, env=env or self.env,
                                     input=input, text=True, stdout=output, stderr=subprocess.STDOUT, timeout=timeout)
         if result.returncode:
-            # Never dump setup logs or secrets into notebook output.
+            safe_steps = {'apt-update', 'apt-install', 'python-environment', 'python-environment-check',
+                          'python-environment-fallback', 'virtualenv-bootstrap', 'pip-bootstrap',
+                          'python-dependencies', 'torch-install'}
+            if name in safe_steps:
+                tail = '\n'.join(path.read_text(errors='replace').splitlines()[-18:])
+                for value in getattr(self, 'private', {}).values():
+                    tail = tail.replace(value, '[REDACTED]')
+                # Redact credential-bearing URLs from private package indexes/proxies.
+                tail = re.sub(r'(https?://)[^\s/@]+:[^\s/@]+@', r'\1[REDACTED]@', tail)
+                print(tail, flush=True)
             raise RuntimeError(f'{name} failed (exit {result.returncode}). Inspect private log: {path}')
         return result
 
@@ -181,6 +191,36 @@ class ColabRuntime:
             time.sleep(2)
         raise RuntimeError(f'{name} did not become ready at {url}; inspect {self.logs / (name + ".log")}')
 
+    def create_python_environment(self):
+        # Colab's kernel can be a custom /usr/local Python, while apt's
+        # python3-venv supplies ensurepip only for /usr/bin/python3.
+        # Do not reuse the partial kernel-created 'venv' from older launchers.
+        system_python = Path('/usr/bin/python3')
+        if not system_python.is_file():
+            raise RuntimeError('System Python is missing after apt-install; inspect logs/apt-install.log.')
+        clean_env = dict(self.env)
+        clean_env.pop('PYTHONHOME', None)
+        clean_env.pop('PYTHONPATH', None)
+        destination = self.root / 'venv-system'
+        try:
+            self.run([system_python, '-m', 'venv', destination], 'python-environment', env=clean_env)
+            self.python = destination / 'bin/python'
+            self.run([self.python, '-m', 'pip', '--version'], 'python-environment-check', env=clean_env)
+        except RuntimeError:
+            # virtualenv carries pip wheels and does not depend on ensurepip.
+            # Install the builder into a separate directory, never the kernel.
+            bootstrap = self.root / 'virtualenv-bootstrap'
+            self.run([sys.executable, '-m', 'pip', 'install', '--target', bootstrap,
+                      'virtualenv==20.29.3'], 'virtualenv-bootstrap', env=clean_env)
+            builder_env = dict(clean_env, PYTHONPATH=str(bootstrap))
+            destination = self.root / 'venv-fallback'
+            self.run([sys.executable, '-m', 'virtualenv', '--python', system_python,
+                      destination], 'python-environment-fallback', env=builder_env)
+            self.python = destination / 'bin/python'
+            self.run([self.python, '-m', 'pip', '--version'], 'python-environment-check', env=clean_env)
+        self.env['PATH'] = str(self.python.parent) + os.pathsep + self.env['PATH']
+        print('Service Python environment ready (separate from the Colab kernel).', flush=True)
+
     def install(self):
         memory = available_memory_gib()
         free_disk = shutil.disk_usage(self.root).free / 1024**3
@@ -189,9 +229,9 @@ class ColabRuntime:
             raise RuntimeError('Full native demo needs at least 10 GiB RAM and 25 GiB free disk. Use a larger Colab runtime.')
         self.run(['apt-get', 'update', '-qq'], 'apt-update')
         self.run(['apt-get', 'install', '-y', '-qq', 'postgresql', 'postgresql-contrib', 'postgresql-server-dev-all',
-                  'redis-server', 'openjdk-17-jre-headless', 'python3-venv', 'build-essential', 'git', 'curl',
+                  'redis-server', 'openjdk-17-jre-headless', 'python3', 'python3-venv', 'build-essential', 'git', 'curl',
                   'ffmpeg', 'libsndfile1', 'espeak-ng', 'xz-utils'], 'apt-install')
-        self.run([sys.executable, '-m', 'venv', str(self.root / 'venv')], 'python-environment')
+        self.create_python_environment()
         self.run([self.python, '-m', 'pip', 'install', '--upgrade', 'pip'], 'pip-bootstrap')
         # CPU wheels avoid downloading gigabytes of unused CUDA dependencies.
         self.run([self.python, '-m', 'pip', 'install', 'torch==2.6.0', '--index-url', 'https://download.pytorch.org/whl/cpu'], 'torch-install')
@@ -209,7 +249,7 @@ class ColabRuntime:
                     extract(archive, self.root / 'tools')
                     marker.touch()
         tools = self.root / 'tools'
-        self.env['PATH'] = f'{tools}/node-v20.19.0-linux-x64/bin:{tools}/go/bin:{self.root}/venv/bin:' + self.env['PATH']
+        self.env['PATH'] = f'{tools}/node-v20.19.0-linux-x64/bin:{tools}/go/bin:{self.python.parent}:' + self.env['PATH']
         self.env['GOPATH'] = str(self.root / 'go-cache')
         self.run(['go', 'build', '-o', tools / 'minio', '.'], 'minio-build', cwd=tools / 'minio-RELEASE.2025-04-22T22-12-26Z')
         vector_source = self.root / 'pgvector'

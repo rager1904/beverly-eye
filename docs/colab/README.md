@@ -31,3 +31,7 @@ The earlier `docker-compose.colab.yml` is retained as a legacy Linux VM override
 ## Validation
 
 `python -m unittest discover -s tests/unit -p test_colab_notebook.py -v` checks notebook syntax, no-URL-input flow, process ownership, early failure handling, archive safety, service ports/imports and the migration chain. These are offline regression checks; they do not establish live Colab/model functionality.
+
+### Recovering from `python-environment failed`
+
+The install cell now refreshes the checked-out launcher from GitHub before retrying. Open the latest GitHub notebook and rerun setup plus the install cell. The launcher uses `/usr/bin/python3` with the distro's `python3-venv` rather than Colab's potentially different kernel Python. If ensurepip still fails, a separate virtualenv builder seeds pip without changing the notebook kernel. The earlier incomplete `venv` directory is left untouched. Dependency-installation failures show a redacted log tail; authentication setup logs remain private.

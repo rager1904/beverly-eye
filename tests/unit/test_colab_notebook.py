@@ -142,6 +142,9 @@ class NotebookTests(unittest.TestCase):
             result = types.SimpleNamespace(returncode=0, stdout='ready', stderr='')
             with patch('subprocess.run', return_value=result):
                 self.run_cell(5)
+                self.assertEqual(self.scope['DEMO_LOGIN_PASSWORD'], 'UbuntuCare2024!')
+                self.assertIn('KEYCLOAK_DEMO_USER_PASSWORD=UbuntuCare2024!', self.scope['COLAB_ENV_FILE'].read_text())
+                self.assertNotEqual(self.scope['env']['KEYCLOAK_ADMIN_PASSWORD'], 'UbuntuCare2024!')
                 original = (self.scope['COLAB_PROJECT'], self.scope['DEMO_LOGIN_PASSWORD'], self.scope['COLAB_ENV_FILE'].read_text())
                 self.run_cell(5)
             self.assertEqual(original, (self.scope['COLAB_PROJECT'], self.scope['DEMO_LOGIN_PASSWORD'], self.scope['COLAB_ENV_FILE'].read_text()))

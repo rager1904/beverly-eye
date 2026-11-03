@@ -215,6 +215,20 @@ class NotebookTests(unittest.TestCase):
         self.assertEqual(response, 'core-response')
         self.assertEqual(registry._services['agents'], [])
 
+    def test_frontend_failure_shows_redacted_build_diagnostics(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(native, 'require_colab'):
+            runtime = native.ColabRuntime(root=directory)
+            secret = runtime.private['secret_key']
+            def fail(args, **kwargs):
+                kwargs['stdout'].write('Build failed: sample error ' + secret + ' https://user:password@example.test/package')
+                return types.SimpleNamespace(returncode=1)
+            output = io.StringIO()
+            with patch.object(native.subprocess, 'run', side_effect=fail), contextlib.redirect_stdout(output), self.assertRaises(RuntimeError):
+                runtime.run(['npm', 'run', 'build'], 'frontend-build')
+            self.assertIn('sample error', output.getvalue())
+            self.assertNotIn(secret, output.getvalue())
+            self.assertNotIn('user:password', output.getvalue())
+
     def test_archive_rejects_traversal(self):
         import tarfile
         with tempfile.TemporaryDirectory() as directory:

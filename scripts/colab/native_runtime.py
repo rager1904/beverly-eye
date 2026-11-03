@@ -148,9 +148,10 @@ class ColabRuntime:
         if result.returncode:
             safe_steps = {'apt-update', 'apt-install', 'python-environment', 'python-environment-check',
                           'python-environment-fallback', 'virtualenv-bootstrap', 'pip-bootstrap',
-                          'python-dependencies', 'python-ai-dependencies', 'torch-install'}
+                          'python-dependencies', 'python-ai-dependencies', 'torch-install',
+                          'frontend-dependencies', 'frontend-build'}
             if name in safe_steps:
-                tail = '\n'.join(path.read_text(errors='replace').splitlines()[-18:])
+                tail = '\n'.join(path.read_text(errors='replace').splitlines()[-60:])
                 for value in getattr(self, 'private', {}).values():
                     tail = tail.replace(value, '[REDACTED]')
                 # Redact credential-bearing URLs from private package indexes/proxies.

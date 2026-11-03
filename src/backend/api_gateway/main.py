@@ -66,8 +66,11 @@ async def check_database_health() -> dict:
 async def check_redis_health() -> dict:
     try:
         import asyncio
+        from urllib.parse import urlparse
+        endpoint = urlparse(settings.redis_url)
         reader, writer = await asyncio.wait_for(
-            asyncio.open_connection("redis", 6379), timeout=2
+            asyncio.open_connection(endpoint.hostname or "redis",
+                                    endpoint.port or 6379), timeout=2
         )
         writer.write(b"PING\r\n")
         await writer.drain()

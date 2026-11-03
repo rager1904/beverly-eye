@@ -92,6 +92,9 @@ class ColabRuntime:
         self.env.update(PYTHONPATH=str(REPO), PYTHONUNBUFFERED='1', OMP_NUM_THREADS='2', TOKENIZERS_PARALLELISM='false')
         self.python = self.root / 'venv/bin/python'
         self.frontend_url = None
+        tools = self.root / 'tools'
+        self.env['PATH'] = f'{tools}/node-v20.19.0-linux-x64/bin:{tools}/go/bin:{self.root}/venv/bin:' + self.env['PATH']
+        self.env['GOPATH'] = str(self.root / 'go-cache')
         secret_file = self.root / 'secrets.json'
         if secret_file.exists():
             private = json.loads(secret_file.read_text())
@@ -101,17 +104,18 @@ class ColabRuntime:
             with os.fdopen(fd, 'w') as stream:
                 json.dump(private, stream)
         self.private = private
-        db_url = f"postgresql+asyncpg://ubuntucare:{private['db_password']}@127.0.0.1:5432/ubuntucare"
+        db_url = f"postgresql+asyncpg://ubuntucare:{private['db_password']}@127.0.0.1:55432/ubuntucare"
         self.env.update({
             'ENVIRONMENT': 'development', 'SECRET_KEY': private['secret_key'], 'DATABASE_URL': db_url,
-            'POSTGRES_HOST': '127.0.0.1', 'POSTGRES_PORT': '5432', 'POSTGRES_USER': 'ubuntucare',
+            'POSTGRES_HOST': '127.0.0.1', 'POSTGRES_PORT': '55432', 'POSTGRES_USER': 'ubuntucare',
             'POSTGRES_DB': 'ubuntucare', 'POSTGRES_PASSWORD': private['db_password'],
-            'REDIS_URL': 'redis://127.0.0.1:6379/0', 'REDIS_HOST': '127.0.0.1',
+            'CELERY_BROKER_URL': 'redis://127.0.0.1:56379/0', 'CELERY_RESULT_BACKEND': 'redis://127.0.0.1:56379/0',
+            'REDIS_URL': 'redis://127.0.0.1:56379/0', 'REDIS_HOST': '127.0.0.1', 'REDIS_PORT': '56379',
             'KEYCLOAK_SERVER_URL': 'http://127.0.0.1:8081', 'KEYCLOAK_REALM': 'ubuntucare',
             'KEYCLOAK_CLIENT_ID': 'api-gateway', 'KEYCLOAK_CLIENT_SECRET': private['kc_client'],
             'KEYCLOAK_ADMIN_USER': 'admin', 'KEYCLOAK_ADMIN': 'admin',
             'KEYCLOAK_ADMIN_PASSWORD': private['kc_admin'], 'KEYCLOAK_DEMO_USER_PASSWORD': 'UbuntuCare2024!',
-            'KC_DB': 'postgres', 'KC_DB_URL': 'jdbc:postgresql://127.0.0.1:5432/ubuntucare_keycloak',
+            'KC_DB': 'postgres', 'KC_DB_URL': 'jdbc:postgresql://127.0.0.1:55432/ubuntucare_keycloak',
             'KC_DB_USERNAME': 'ubuntucare', 'KC_DB_PASSWORD': private['db_password'],
             'JAVA_OPTS_KC_HEAP': '-Xms64m -Xmx384m',
             'NEO4J_URI': 'bolt://127.0.0.1:7687', 'NEO4J_USER': 'neo4j', 'NEO4J_PASSWORD': private['neo4j'],
@@ -237,9 +241,9 @@ class ColabRuntime:
             self.run(['runuser', '-u', 'postgres', '--', postgres_bin / 'initdb', '-D', data,
                       '--auth-local=trust', '--auth-host=scram-sha-256'], 'postgres-init')
         self.start('postgres', ['runuser', '-u', 'postgres', '--', postgres_bin / 'postgres', '-D', data,
-                               '-h', '127.0.0.1', '-p', '5432', '-k', str(data), '-c', 'shared_buffers=128MB'], port=5432)
+                               '-h', '127.0.0.1', '-p', '55432', '-k', str(data), '-c', 'shared_buffers=128MB'], port=55432)
         for _ in range(60):
-            check = subprocess.run([postgres_bin / 'pg_isready', '-h', '127.0.0.1', '-p', '5432'], stdout=subprocess.DEVNULL)
+            check = subprocess.run([postgres_bin / 'pg_isready', '-h', '127.0.0.1', '-p', '55432'], stdout=subprocess.DEVNULL)
             if check.returncode == 0:
                 break
             time.sleep(2)
@@ -251,8 +255,8 @@ class ColabRuntime:
             sql += f"SELECT 'CREATE DATABASE {database} OWNER ubuntucare' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='{database}')\\gexec\n"
         # Password is stdin, never a process argument or notebook output.
         self.run(['runuser', '-u', 'postgres', '--', 'psql', '-h', data, '-v', 'ON_ERROR_STOP=1'], 'database-users', input=sql)
-        self.start('redis', ['redis-server', '--bind', '127.0.0.1', '--port', '6379', '--dir', self.root,
-                             '--save', '', '--appendonly', 'no'], port=6379)
+        self.start('redis', ['redis-server', '--bind', '127.0.0.1', '--port', '56379', '--dir', self.root,
+                             '--save', '', '--appendonly', 'no'], port=56379)
         self.run([self.python, '-m', 'alembic', '-c', 'scripts/migration/alembic.ini', 'upgrade', 'head'], 'database-migrations')
         tools = self.root / 'tools'
         kc = tools / 'keycloak-23.0.7/bin/kc.sh'
@@ -286,8 +290,8 @@ class ColabRuntime:
             env = dict(self.env, UBUNTUCARE_COLAB_SERVICE=name)
             self.start(name, [self.python, '-m', 'uvicorn', 'scripts.colab.asgi:create_app', '--factory', '--host', '127.0.0.1', '--port', str(port), '--workers', '1'], env=env, port=port)
             health_path = '/api/v1/rag/health' if name == 'rag' else '/health'
-            predicate = (lambda data: data.get('status') == 'healthy' and data.get('components', {}).get('qdrant', {}).get('status') == 'healthy' and bool(data.get('components', {}).get('embeddings', {}).get('models')) and all(v == 'healthy' for v in data['components']['embeddings']['models'].values())) if name == 'rag' else None
-            self.wait_http(name, f'http://127.0.0.1:{port}{health_path}', timeout=900 if name == 'rag' else 180, healthy=predicate)
+            predicate = (lambda data: data.get('status') == 'healthy' and data.get('components', {}).get('qdrant', {}).get('status') == 'healthy' and bool(data.get('components', {}).get('embeddings', {}).get('models')) and all(v == 'healthy' for v in data['components']['embeddings']['models'].values())) if name == 'rag' else (lambda data: data.get('status') == 'healthy')
+            self.wait_http(name, f'http://127.0.0.1:{port}{health_path}', timeout=900 if name in {'rag', 'asr'} else 180, healthy=predicate)
         self.start('gateway', [self.python, '-m', 'uvicorn', 'scripts.colab.asgi:create_app', '--factory', '--host', '127.0.0.1', '--port', '8000'],
                    env=dict(self.env, UBUNTUCARE_COLAB_SERVICE='gateway'), port=8000)
         self.wait_http('gateway', 'http://127.0.0.1:8000/health', healthy=lambda data: data.get('status') == 'healthy')

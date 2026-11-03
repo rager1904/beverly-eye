@@ -158,6 +158,25 @@ class NotebookTests(unittest.TestCase):
         self.assertNotIn('--volumes', run.call_args.args[0])
         self.assertTrue(run.call_args.kwargs['check'])
 
+    def test_temporary_url_is_displayed_as_clickable_link(self):
+        self.setup_remote()
+        rendered = []
+        display_module = types.ModuleType('IPython.display')
+        display_module.HTML = lambda html: html
+        display_module.display = rendered.append
+        with patch.dict('sys.modules', {'IPython.display': display_module}), contextlib.redirect_stdout(self.output):
+            self.scope['show_frontend_url']('https://fixture.trycloudflare.com', temporary=True)
+        self.assertIn('Your temporary frontend URL: https://fixture.trycloudflare.com', self.output.getvalue())
+        self.assertIn('href="https://fixture.trycloudflare.com/login"', rendered[0])
+        self.assertIn('noopener noreferrer', rendered[0])
+
+    def test_remote_url_is_displayed_before_authentication(self):
+        self.setup_remote()
+        self.login()
+        output = self.output.getvalue()
+        self.assertLess(output.index('Your connected frontend URL:'), output.index('POST /auth/login:'))
+        self.assertIn('https://demo.example.test/login', output)
+
     def test_explicit_synthetic_write_flow(self):
         self.setup_remote()
         self.login()

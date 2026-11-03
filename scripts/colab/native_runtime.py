@@ -25,7 +25,7 @@ import urllib.request
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
-from asgi import SERVICES
+from asgi import SERVICES, selected_services
 
 DOWNLOADS = {
     'keycloak': ('https://github.com/keycloak/keycloak/releases/download/23.0.7/keycloak-23.0.7.tar.gz', 'keycloak.tar.gz'),
@@ -81,8 +81,9 @@ def extract(archive, destination):
 
 
 class ColabRuntime:
-    def __init__(self, root='/content/ubuntucare-native'):
+    def __init__(self, root='/content/ubuntucare-native', enable_ai=False):
         require_colab()
+        self.enable_ai = bool(enable_ai)
         self.root = Path(root)
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         self.logs = self.root / 'logs'
@@ -90,6 +91,7 @@ class ColabRuntime:
         self.processes = {}
         self.env = os.environ.copy()
         self.env.pop('PYTHONHOME', None)
+        self.env['UBUNTUCARE_COLAB_ENABLE_AI'] = '1' if self.enable_ai else '0'
         self.env.update(PYTHONPATH=str(REPO), PYTHONUNBUFFERED='1', OMP_NUM_THREADS='2', TOKENIZERS_PARALLELISM='false')
         self.python = self.root / 'venv-system/bin/python'
         self.frontend_url = None
@@ -146,7 +148,7 @@ class ColabRuntime:
         if result.returncode:
             safe_steps = {'apt-update', 'apt-install', 'python-environment', 'python-environment-check',
                           'python-environment-fallback', 'virtualenv-bootstrap', 'pip-bootstrap',
-                          'python-dependencies', 'torch-install'}
+                          'python-dependencies', 'python-ai-dependencies', 'torch-install'}
             if name in safe_steps:
                 tail = '\n'.join(path.read_text(errors='replace').splitlines()[-18:])
                 for value in getattr(self, 'private', {}).values():
@@ -221,24 +223,44 @@ class ColabRuntime:
         self.env['PATH'] = str(self.python.parent) + os.pathsep + self.env['PATH']
         print('Service Python environment ready (separate from the Colab kernel).', flush=True)
 
+    def configure_hosts(self):
+        hosts = Path('/etc/hosts')
+        aliases = '127.0.0.1 emr api-gateway agent-orchestrator asr tts rag postgres redis qdrant neo4j minio host.docker.internal # ubuntucare-native\n'
+        if '# ubuntucare-native' not in hosts.read_text():
+            with hosts.open('a') as stream:
+                stream.write('\n' + aliases)
+
+    def app_services(self):
+        return selected_services(self.enable_ai)
+
+    def downloads(self):
+        ai_tools = {'qdrant', 'neo4j', 'ollama'}
+        return {name: item for name, item in DOWNLOADS.items() if self.enable_ai or name not in ai_tools}
+
     def install(self):
         memory = available_memory_gib()
         free_disk = shutil.disk_usage(self.root).free / 1024**3
         print(f'Colab RAM limit: {memory:.1f} GiB; free disk: {free_disk:.1f} GiB', flush=True)
-        if memory < 10 or free_disk < 25:
-            raise RuntimeError('Full native demo needs at least 10 GiB RAM and 25 GiB free disk. Use a larger Colab runtime.')
+        min_memory, min_disk = (10, 25) if self.enable_ai else (4, 10)
+        if memory < min_memory or free_disk < min_disk:
+            raise RuntimeError(f'This Colab demo configuration needs at least {min_memory} GiB RAM and {min_disk} GiB free disk.')
         self.run(['apt-get', 'update', '-qq'], 'apt-update')
         self.run(['apt-get', 'install', '-y', '-qq', 'postgresql', 'postgresql-contrib', 'postgresql-server-dev-all',
                   'redis-server', 'openjdk-17-jre-headless', 'python3', 'python3-venv', 'build-essential', 'git', 'curl',
-                  'ffmpeg', 'libsndfile1', 'espeak-ng', 'xz-utils'], 'apt-install')
+                  'xz-utils'], 'apt-install')
+        if self.enable_ai:
+            self.run(['apt-get', 'install', '-y', '-qq', 'ffmpeg', 'libsndfile1', 'espeak-ng'], 'apt-ai-install')
         self.create_python_environment()
         self.run([self.python, '-m', 'pip', 'install', '--upgrade', 'pip'], 'pip-bootstrap')
         # CPU wheels avoid downloading gigabytes of unused CUDA dependencies.
-        self.run([self.python, '-m', 'pip', 'install', 'torch==2.6.0', '--index-url', 'https://download.pytorch.org/whl/cpu'], 'torch-install')
+        if self.enable_ai:
+            self.run([self.python, '-m', 'pip', 'install', 'torch==2.6.0', '--index-url', 'https://download.pytorch.org/whl/cpu'], 'torch-install')
         self.run([self.python, '-m', 'pip', 'install', '-r', HERE / 'requirements.txt'], 'python-dependencies')
+        if self.enable_ai:
+            self.run([self.python, '-m', 'pip', 'install', '-r', HERE / 'requirements.ai.txt'], 'python-ai-dependencies')
         packages = self.root / 'downloads'
         packages.mkdir(exist_ok=True)
-        for name, (url, filename) in DOWNLOADS.items():
+        for name, (url, filename) in self.downloads().items():
             print(f'Downloading {name} from official publisher ...', flush=True)
             archive = fetch(url, packages / filename)
             if name == 'cloudflared':
@@ -257,16 +279,12 @@ class ColabRuntime:
             self.run(['git', 'clone', '--depth', '1', '--branch', 'v0.8.0', 'https://github.com/pgvector/pgvector.git', vector_source], 'pgvector-download')
         self.run(['make'], 'pgvector-build', cwd=vector_source)
         self.run(['make', 'install'], 'pgvector-install', cwd=vector_source)
-        hosts = Path('/etc/hosts')
-        aliases = '127.0.0.1 emr api-gateway agent-orchestrator asr tts rag postgres redis qdrant neo4j minio host.docker.internal # ubuntucare-native\n'
-        if '# ubuntucare-native' not in hosts.read_text():
-            with hosts.open('a') as stream:
-                stream.write('\n' + aliases)
+        self.configure_hosts()
         frontend = REPO / 'src/frontend/web'
         self.run(['npm', 'ci', '--no-audit', '--no-fund'], 'frontend-dependencies', cwd=frontend)
         self.run(['npm', 'run', 'build'], 'frontend-build', cwd=frontend)
         # Import checks catch unresolved dependencies before any tunnel is exposed.
-        for name, (module, _) in SERVICES.items():
+        for name, (module, _) in self.app_services().items():
             self.run([self.python, '-c', f'import {module}'], 'import-' + name)
         print('Native dependencies installed. No Docker daemon or remote URL is used.', flush=True)
 
@@ -307,26 +325,28 @@ class ColabRuntime:
         for line in Path(self.env['ENV_FILE']).read_text().splitlines():
             if line.startswith('KEYCLOAK_CLIENT_SECRET='):
                 self.env['KEYCLOAK_CLIENT_SECRET'] = line.split('=', 1)[1].strip()
-        qconfig = self.root / 'qdrant.yaml'
-        qconfig.write_text(f'storage:\n  storage_path: {self.root}/qdrant-data\nservice:\n  host: 127.0.0.1\n  http_port: 6333\n  grpc_port: 6334\ntelemetry_disabled: true\n')
-        self.start('qdrant', [tools / 'qdrant', '--config-path', qconfig], port=6333)
-        self.wait_http('qdrant', 'http://127.0.0.1:6333/healthz')
-        neo = tools / 'neo4j-community-5.26.0'
-        conf = neo / 'conf/neo4j.conf'
-        conf.write_text('server.default_listen_address=127.0.0.1\nserver.memory.heap.initial_size=128m\nserver.memory.heap.max_size=384m\nserver.memory.pagecache.size=128m\nserver.bolt.listen_address=127.0.0.1:7687\nserver.http.listen_address=127.0.0.1:7474\n')
-        if not (neo / 'data/dbms/auth.ini').exists():
-            # neo4j-admin supports stdin only through env-configured import; use env auth for first start instead.
-            self.run([neo / 'bin/neo4j-admin', 'dbms', 'set-initial-password', self.private['neo4j']], 'neo4j-password')
-        self.start('neo4j', [neo / 'bin/neo4j', 'console'], port=7474)
-        self.wait_http('neo4j', 'http://127.0.0.1:7474', timeout=180)
+        if self.enable_ai:
+            qconfig = self.root / 'qdrant.yaml'
+            qconfig.write_text(f'storage:\n  storage_path: {self.root}/qdrant-data\nservice:\n  host: 127.0.0.1\n  http_port: 6333\n  grpc_port: 6334\ntelemetry_disabled: true\n')
+            self.start('qdrant', [tools / 'qdrant', '--config-path', qconfig], port=6333)
+            self.wait_http('qdrant', 'http://127.0.0.1:6333/healthz')
+            neo = tools / 'neo4j-community-5.26.0'
+            conf = neo / 'conf/neo4j.conf'
+            conf.write_text('server.default_listen_address=127.0.0.1\nserver.memory.heap.initial_size=128m\nserver.memory.heap.max_size=384m\nserver.memory.pagecache.size=128m\nserver.bolt.listen_address=127.0.0.1:7687\nserver.http.listen_address=127.0.0.1:7474\n')
+            if not (neo / 'data/dbms/auth.ini').exists():
+                # neo4j-admin supports stdin only through env-configured import; use env auth for first start instead.
+                self.run([neo / 'bin/neo4j-admin', 'dbms', 'set-initial-password', self.private['neo4j']], 'neo4j-password')
+            self.start('neo4j', [neo / 'bin/neo4j', 'console'], port=7474)
+            self.wait_http('neo4j', 'http://127.0.0.1:7474', timeout=180)
         self.start('minio', [tools / 'minio', 'server', self.root / 'objects', '--address', '127.0.0.1:9000', '--console-address', '127.0.0.1:9001'], port=9000)
         self.wait_http('minio', 'http://127.0.0.1:9000/minio/health/live')
-        self.start('ollama', [tools / 'bin/ollama', 'serve'], port=11434)
-        self.wait_http('ollama', 'http://127.0.0.1:11434/api/tags')
-        self.run([tools / 'bin/ollama', 'pull', 'qwen2.5:1.5b'], 'llm-model-download', timeout=1800)
+        if self.enable_ai:
+            self.start('ollama', [tools / 'bin/ollama', 'serve'], port=11434)
+            self.wait_http('ollama', 'http://127.0.0.1:11434/api/tags')
+            self.run([tools / 'bin/ollama', 'pull', 'qwen2.5:1.5b'], 'llm-model-download', timeout=1800)
 
     def start_apps(self):
-        for name, (_, port) in SERVICES.items():
+        for name, (_, port) in self.app_services().items():
             env = dict(self.env, UBUNTUCARE_COLAB_SERVICE=name)
             self.start(name, [self.python, '-m', 'uvicorn', 'scripts.colab.asgi:create_app', '--factory', '--host', '127.0.0.1', '--port', str(port), '--workers', '1'], env=env, port=port)
             health_path = '/api/v1/rag/health' if name == 'rag' else '/health'
@@ -380,7 +400,8 @@ class ColabRuntime:
         print('Health-only shells: laboratory, pharmacy, medical imaging. Starting them does not implement their missing APIs.')
         print('Scheduler runs registered tasks only; unfinished production task names are not enqueued in Colab.')
         print('External SMS/email/WhatsApp providers need separate credentials. No real messages are sent by startup checks.')
-        print('Colab excludes production ELK/Grafana/Prometheus/Portainer/Nginx/Weaviate; native Qdrant is the selected vector backend.')
+        print('AI services:', 'enabled' if self.enable_ai else 'SKIPPED (Ollama, agents, ASR, TTS, RAG, Qdrant, Neo4j)')
+        print('Colab excludes production ELK/Grafana/Prometheus/Portainer/Nginx/Weaviate.')
 
     def stop(self):
         for name, process in reversed(list(self.processes.items())):

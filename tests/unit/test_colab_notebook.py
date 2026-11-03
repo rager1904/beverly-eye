@@ -145,6 +145,76 @@ class NotebookTests(unittest.TestCase):
             runtime.create_python_environment()
         self.assertNotIn('environment ready', output.getvalue())
 
+    def test_core_install_skips_all_ai_downloads_and_dependencies(self):
+        for enable_ai in (False, True):
+            with self.subTest(enable_ai=enable_ai), tempfile.TemporaryDirectory() as directory, patch.object(native, 'require_colab'):
+                runtime = native.ColabRuntime(root=directory, enable_ai=enable_ai)
+                runtime.run = Mock()
+                runtime.create_python_environment = Mock()
+                runtime.configure_hosts = Mock()
+                def download(url, destination):
+                    destination.write_bytes(b'fixture')
+                    return destination
+                def unpack(archive, destination):
+                    destination.mkdir(parents=True, exist_ok=True)
+                with patch.object(native, 'available_memory_gib', return_value=16), patch.object(native.shutil, 'disk_usage', return_value=types.SimpleNamespace(free=100 * 1024**3)), patch.object(native, 'fetch', side_effect=download) as fetch, patch.object(native, 'extract', side_effect=unpack), contextlib.redirect_stdout(io.StringIO()):
+                    runtime.install()
+                steps = [call.args[1] for call in runtime.run.call_args_list]
+                self.assertEqual('torch-install' in steps, enable_ai)
+                self.assertEqual('python-ai-dependencies' in steps, enable_ai)
+                self.assertEqual('apt-ai-install' in steps, enable_ai)
+                for name in ('agents', 'asr', 'tts', 'rag'):
+                    self.assertEqual('import-' + name in steps, enable_ai)
+                urls = [call.args[0] for call in fetch.call_args_list]
+                for name in ('qdrant', 'ollama', 'neo4j'):
+                    self.assertEqual(native.DOWNLOADS[name][0] in urls, enable_ai)
+                self.assertIn('frontend-build', steps)
+                self.assertIn('import-emr', steps)
+
+    def test_core_startup_keeps_auth_and_frontend_without_ai(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(native, 'require_colab'):
+            runtime = native.ColabRuntime(root=directory)
+            runtime.start = Mock()
+            runtime.wait_http = Mock()
+            runtime.run = Mock()
+            runtime.verify_login = Mock()
+            with patch.object(native.Path, 'iterdir', return_value=iter([Path('/usr/lib/postgresql/15')])), patch.object(native.subprocess, 'run', return_value=types.SimpleNamespace(returncode=0)), contextlib.redirect_stdout(io.StringIO()):
+                runtime.start_data()
+                runtime.start_apps()
+            started = [call.args[0] for call in runtime.start.call_args_list]
+            for name in ('postgres', 'redis', 'keycloak', 'emr', 'gateway', 'frontend'):
+                self.assertIn(name, started)
+            for name in ('ollama', 'agents', 'asr', 'tts', 'rag', 'qdrant', 'neo4j'):
+                self.assertNotIn(name, started)
+            runtime.verify_login.assert_called_once_with('http://127.0.0.1:3000')
+            self.assertEqual(runtime.env['UBUNTUCARE_COLAB_ENABLE_AI'], '0')
+            self.assertNotIn('llm-model-download', [call.args[1] for call in runtime.run.call_args_list])
+
+    def test_disabled_ai_routes_report_503_and_leave_core_routes_available(self):
+        import asyncio
+        from unittest.mock import AsyncMock
+        import asgi
+        middleware = []
+        app = types.SimpleNamespace(middleware=lambda _: lambda fn: middleware.append(fn), api_route=lambda *a, **k: lambda fn: fn)
+        registry = types.SimpleNamespace(_services={})
+        response_module = types.ModuleType('fastapi.responses')
+        response_module.JSONResponse = lambda **kwargs: kwargs
+        gateway_module = types.ModuleType('src.backend.api_gateway.main')
+        gateway_module.app = app
+        routes_module = types.ModuleType('src.backend.api_gateway.routes')
+        routes_module.registry = registry
+        routes_module.build_proxy_handler = Mock()
+        with patch.dict('sys.modules', {'fastapi.responses': response_module, 'src.backend.api_gateway.main': gateway_module, 'src.backend.api_gateway.routes': routes_module}), patch.dict(native.os.environ, {'UBUNTUCARE_COLAB_SERVICE': 'gateway', 'UBUNTUCARE_COLAB_ENABLE_AI': '0'}):
+            asgi.create_app()
+        next_handler = AsyncMock(return_value='core-response')
+        for path in ('/api/v1/agents/chat', '/api/v1/asr/transcribe', '/api/v1/tts', '/v2/rag/search'):
+            response = asyncio.run(middleware[0](types.SimpleNamespace(url=types.SimpleNamespace(path=path)), next_handler))
+            self.assertEqual(response['status_code'], 503)
+        next_handler.assert_not_awaited()
+        response = asyncio.run(middleware[0](types.SimpleNamespace(url=types.SimpleNamespace(path='/api/v1/auth/login')), next_handler))
+        self.assertEqual(response, 'core-response')
+        self.assertEqual(registry._services['agents'], [])
+
     def test_archive_rejects_traversal(self):
         import tarfile
         with tempfile.TemporaryDirectory() as directory:

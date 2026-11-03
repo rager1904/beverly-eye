@@ -57,7 +57,7 @@ REALM_ROLES = [
 ]
 
 DEV_USERS = [
-    # ── Super Admin ──────────────────────────────────
+    # â”€â”€ Super Admin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     {
         "username": "admin",
         "email": "admin@ubuntucare.gov.zm",
@@ -66,7 +66,7 @@ DEV_USERS = [
         "password": DEV_USER_PASSWORD,
         "roles": ["admin"],
     },
-    # ── Hospital Admin (UTH) ─────────────────────────
+    # â”€â”€ Hospital Admin (UTH) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     {
         "username": "uth_admin",
         "email": "uth.admin@uh.gov.zm",
@@ -75,7 +75,7 @@ DEV_USERS = [
         "password": DEV_USER_PASSWORD,
         "roles": ["admin"],
     },
-    # ── Ministry of Health ───────────────────────────
+    # â”€â”€ Ministry of Health â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     {
         "username": "moh_officer",
         "email": "reports@moh.gov.zm",
@@ -84,7 +84,7 @@ DEV_USERS = [
         "password": DEV_USER_PASSWORD,
         "roles": ["ministry_official"],
     },
-    # ── Senior Medical Officer (UTH) ─────────────────
+    # â”€â”€ Senior Medical Officer (UTH) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     {
         "username": "dr_mwamba",
         "email": "john.mwamba@uh.gov.zm",
@@ -93,7 +93,7 @@ DEV_USERS = [
         "password": DEV_USER_PASSWORD,
         "roles": ["doctor"],
     },
-    # ── Registered Nurse Midwife (UTH) ───────────────
+    # â”€â”€ Registered Nurse Midwife (UTH) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     {
         "username": "nurse_banda",
         "email": "grace.banda@uh.gov.zm",
@@ -102,7 +102,7 @@ DEV_USERS = [
         "password": DEV_USER_PASSWORD,
         "roles": ["nurse", "community_health_worker"],
     },
-    # ── Community Health Worker (Kanyama) ────────────
+    # â”€â”€ Community Health Worker (Kanyama) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     {
         "username": "chw_mulenga",
         "email": "peter.mulenga@chw.gov.zm",
@@ -111,7 +111,7 @@ DEV_USERS = [
         "password": DEV_USER_PASSWORD,
         "roles": ["community_health_worker"],
     },
-    # ── Pharmacist (Ndola) ───────────────────────────
+    # â”€â”€ Pharmacist (Ndola) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     {
         "username": "pharm_tembo",
         "email": "alice.tembo@ndh.gov.zm",
@@ -120,7 +120,7 @@ DEV_USERS = [
         "password": DEV_USER_PASSWORD,
         "roles": ["pharmacist"],
     },
-    # ── Chief Lab Scientist (UTH) ────────────────────
+    # â”€â”€ Chief Lab Scientist (UTH) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     {
         "username": "lab_kasonde",
         "email": "brian.kasonde@uh.gov.zm",
@@ -129,7 +129,7 @@ DEV_USERS = [
         "password": DEV_USER_PASSWORD,
         "roles": ["lab_technician"],
     },
-    # ── Patient (demo) ───────────────────────────────
+    # â”€â”€ Patient (demo) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     {
         "username": "patient",
         "email": "patient@ubuntucare.gov.zm",
@@ -179,6 +179,19 @@ def wait_for_keycloak(timeout_seconds: int = 120) -> None:
             if status == 200:
                 print(f"Keycloak is ready at {SERVER_URL}")
                 return
+            if status == 404:
+                # Native start-dev may not expose optional health endpoints.
+                # Only fall back when absent; a 503 is an explicit unhealthy state.
+                discovery_url = f"{SERVER_URL}/realms/master/.well-known/openid-configuration"
+                discovery_status, discovery_body = http_request("GET", discovery_url)
+                if discovery_status == 200:
+                    try:
+                        discovery = json.loads(discovery_body)
+                    except (ValueError, UnicodeDecodeError):
+                        discovery = None
+                    if isinstance(discovery, dict) and discovery.get("issuer") and discovery.get("token_endpoint"):
+                        print(f"Keycloak OpenID discovery is ready at {SERVER_URL}")
+                        return
         except (URLError, ConnectionResetError):
             pass
         time.sleep(3)

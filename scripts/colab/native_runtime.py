@@ -120,7 +120,7 @@ class ColabRuntime:
             'KEYCLOAK_ADMIN_PASSWORD': private['kc_admin'], 'KEYCLOAK_DEMO_USER_PASSWORD': 'UbuntuCare2024!',
             'KC_DB': 'postgres', 'KC_DB_URL': 'jdbc:postgresql://127.0.0.1:55432/ubuntucare_keycloak',
             'KC_DB_USERNAME': 'ubuntucare', 'KC_DB_PASSWORD': private['db_password'],
-            'JAVA_OPTS_KC_HEAP': '-Xms64m -Xmx384m',
+            'JAVA_OPTS_KC_HEAP': '-Xms64m -Xmx384m', 'KC_HEALTH_ENABLED': 'true',
             'NEO4J_URI': 'bolt://127.0.0.1:7687', 'NEO4J_USER': 'neo4j', 'NEO4J_PASSWORD': private['neo4j'],
             'MINIO_ENDPOINT': '127.0.0.1:9000', 'MINIO_ACCESS_KEY': 'ubuntucare', 'MINIO_ROOT_USER': 'ubuntucare',
             'MINIO_SECRET_KEY': private['minio'], 'MINIO_ROOT_PASSWORD': private['minio'],

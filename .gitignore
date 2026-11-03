@@ -236,3 +236,7 @@ mlartifacts/
 
 # Wandb
 wandb/
+
+# Frontend source libraries are application code, not Python build output.
+!src/frontend/web/src/lib/
+!src/frontend/web/src/lib/**

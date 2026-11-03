@@ -168,6 +168,9 @@ class NotebookTests(unittest.TestCase):
                 urls = [call.args[0] for call in fetch.call_args_list]
                 for name in ('qdrant', 'ollama', 'neo4j'):
                     self.assertEqual(native.DOWNLOADS[name][0] in urls, enable_ai)
+                npm_install = next(call.args[0] for call in runtime.run.call_args_list if call.args[1] == 'frontend-dependencies')
+                self.assertIn('--include=dev', npm_install)
+                self.assertIn('frontend-build-tools', steps)
                 self.assertIn('frontend-build', steps)
                 self.assertIn('import-emr', steps)
 
@@ -228,6 +231,13 @@ class NotebookTests(unittest.TestCase):
             self.assertIn('sample error', output.getvalue())
             self.assertNotIn(secret, output.getvalue())
             self.assertNotIn('user:password', output.getvalue())
+
+    def test_frontend_libraries_are_not_ignored(self):
+        import subprocess
+        paths = [str(p.relative_to(ROOT)).replace('\\', '/') for p in (ROOT / 'src/frontend/web/src/lib').glob('*.ts')]
+        self.assertTrue(paths)
+        result = subprocess.run(['git', 'check-ignore', '--no-index', *paths], cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
 
     def test_archive_rejects_traversal(self):
         import tarfile

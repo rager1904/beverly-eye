@@ -282,7 +282,8 @@ class ColabRuntime:
         self.run(['make', 'install'], 'pgvector-install', cwd=vector_source)
         self.configure_hosts()
         frontend = REPO / 'src/frontend/web'
-        self.run(['npm', 'ci', '--no-audit', '--no-fund'], 'frontend-dependencies', cwd=frontend)
+        self.run(['npm', 'ci', '--include=dev', '--no-audit', '--no-fund'], 'frontend-dependencies', cwd=frontend)
+        self.run(['node', '-e', "require.resolve('typescript'); require.resolve('tailwindcss'); require.resolve('autoprefixer')"], 'frontend-build-tools', cwd=frontend)
         self.run(['npm', 'run', 'build'], 'frontend-build', cwd=frontend)
         # Import checks catch unresolved dependencies before any tunnel is exposed.
         for name, (module, _) in self.app_services().items():

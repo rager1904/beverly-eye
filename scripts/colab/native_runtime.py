@@ -149,7 +149,7 @@ class ColabRuntime:
             safe_steps = {'apt-update', 'apt-install', 'python-environment', 'python-environment-check',
                           'python-environment-fallback', 'virtualenv-bootstrap', 'pip-bootstrap',
                           'python-dependencies', 'python-ai-dependencies', 'torch-install',
-                          'frontend-dependencies', 'frontend-build'}
+                          'frontend-dependencies', 'frontend-build', 'worker-dependencies-check'}
             if name in safe_steps:
                 tail = '\n'.join(path.read_text(errors='replace').splitlines()[-60:])
                 for value in getattr(self, 'private', {}).values():
@@ -259,6 +259,8 @@ class ColabRuntime:
         self.run([self.python, '-m', 'pip', 'install', '-r', HERE / 'requirements.txt'], 'python-dependencies')
         if self.enable_ai:
             self.run([self.python, '-m', 'pip', 'install', '-r', HERE / 'requirements.ai.txt'], 'python-ai-dependencies')
+        self.run([self.python, '-c', 'import packaging.version; import kombu.transport.redis'],
+                 'worker-dependencies-check')
         packages = self.root / 'downloads'
         packages.mkdir(exist_ok=True)
         for name, (url, filename) in self.downloads().items():

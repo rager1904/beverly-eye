@@ -171,6 +171,8 @@ class NotebookTests(unittest.TestCase):
                 npm_install = next(call.args[0] for call in runtime.run.call_args_list if call.args[1] == 'frontend-dependencies')
                 self.assertIn('--include=dev', npm_install)
                 self.assertIn('frontend-build-tools', steps)
+                self.assertIn('worker-dependencies-check', steps)
+                self.assertLess(steps.index('worker-dependencies-check'), steps.index('frontend-build'))
                 self.assertIn('frontend-build', steps)
                 self.assertIn('import-emr', steps)
 

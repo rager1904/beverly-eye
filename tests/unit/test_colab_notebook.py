@@ -201,6 +201,22 @@ class NotebookTests(unittest.TestCase):
             self.assertIn('-X', command)
             self.assertNotIn(runtime.private['db_password'], ' '.join(map(str, command)))
             runtime.verify_login.assert_called_once_with('http://127.0.0.1:3000')
+            readiness = next(call for call in runtime.run.call_args_list if call.args[1] == 'worker-readiness')
+            script = readiness.args[0][-1]
+            result = Mock()
+            result.get.return_value = {'status': 'ok'}
+            app = Mock()
+            app.send_task.return_value = result
+            module = types.ModuleType('scripts.colab.tasks')
+            module.celery_app = app
+            with patch.dict('sys.modules', {'scripts.colab.tasks': module}), contextlib.redirect_stdout(io.StringIO()):
+                exec(script, {})
+                app.send_task.assert_called_once_with('core.health_check')
+                result.get.assert_called_once_with(timeout=90)
+                result.forget.assert_called_once()
+                result.get.return_value = {'status': 'failed'}
+                with self.assertRaises(AssertionError):
+                    exec(script, {})
             self.assertEqual(runtime.env['UBUNTUCARE_COLAB_ENABLE_AI'], '0')
             self.assertNotIn('llm-model-download', [call.args[1] for call in runtime.run.call_args_list])
 

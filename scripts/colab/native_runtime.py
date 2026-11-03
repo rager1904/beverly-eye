@@ -366,7 +366,17 @@ class ColabRuntime:
         self.wait_http('gateway', 'http://127.0.0.1:8000/health', healthy=lambda data: data.get('status') == 'healthy')
         self.start('worker', [self.python, '-m', 'celery', '-A', 'scripts.colab.tasks:celery_app', 'worker', '--pool=solo', '--concurrency=1', '--loglevel=INFO'])
         self.start('beat', [self.python, '-m', 'celery', '-A', 'scripts.colab.tasks:celery_app', 'beat', '--schedule', self.root / 'celerybeat-schedule', '--pidfile', self.root / 'celerybeat.pid'])
-        self.run([self.python, '-m', 'celery', '-A', 'scripts.colab.tasks:celery_app', 'inspect', 'ping', '--timeout=15'], 'worker-readiness', timeout=45)
+        # Exercise the task queue and result backend; control broadcasts can miss
+        # a worker while its control consumer is still starting.
+        self.run([self.python, '-c',
+                  'from scripts.colab.tasks import celery_app; '
+                  'result = celery_app.send_task("core.health_check"); '
+                  'reply = result.get(timeout=90); '
+                  'result.forget(); '
+                  'assert isinstance(reply, dict) and reply.get("status") == "ok", '
+                  '"Worker health task returned an unhealthy result"; '
+                  'print("Ready: worker (health task completed)")'],
+                 'worker-readiness', timeout=120)
         self.start('frontend', ['node', 'node_modules/next/dist/bin/next', 'start', '-H', '127.0.0.1', '-p', '3000'], cwd=REPO / 'src/frontend/web', port=3000)
         self.wait_http('frontend', 'http://127.0.0.1:3000/login')
         self.verify_login('http://127.0.0.1:3000')

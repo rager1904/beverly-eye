@@ -6,6 +6,7 @@ from typing import Any, Optional
 
 import asyncpg
 from sqlalchemy import Float, Integer, String, Text, text, Index
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -37,7 +38,7 @@ class DocumentEmbedding(PgVectorBase):
     published_date = mapped_column(String(50), nullable=True)
     version = mapped_column(String(50), nullable=True)
     metadata_ = mapped_column("metadata", JSONB, nullable=True)
-    embedding = mapped_column(ARRAY(Float), nullable=False)
+    embedding = mapped_column(Vector(1024), nullable=False)
     sparse_vector = mapped_column(JSONB, nullable=True)
     created_at = mapped_column(String(50), nullable=True)
 
@@ -53,8 +54,8 @@ class PgVectorStore:
         await self._ensure_extension()
         async with async_session_factory() as session:
             async with session.begin():
-                async with session.connection() as conn:
-                    await conn.run_sync(DocumentEmbedding.metadata.create_all)
+                conn = await session.connection()
+                await conn.run_sync(DocumentEmbedding.metadata.create_all)
         await self._ensure_indexes()
 
     async def _ensure_extension(self) -> None:

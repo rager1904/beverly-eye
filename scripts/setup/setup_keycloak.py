@@ -883,15 +883,23 @@ def main() -> int:
     demo_enabled = demo_users_enabled()
     if demo_enabled:
         ensure_bootstrap_admin(token)
-    else:
-        if not BOOTSTRAP_ADMIN_EMAIL:
+    elif not BOOTSTRAP_ADMIN_EMAIL:
+        # A live project can run without a bootstrap admin only while it is not
+        # yet using the persistent Keycloak database (pre-cutover). Once
+        # KEYCLOAK_DB_MANAGE is enabled, an admin is mandatory so a fresh realm
+        # is never left without one.
+        manage = os.getenv("KEYCLOAK_DB_MANAGE", "").strip().lower()
+        if manage in {"1", "true", "yes", "on"}:
             raise SystemExit(
                 "KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL must be set when demo users are disabled."
             )
-        if find_user(token, BOOTSTRAP_ADMIN_EMAIL):
-            print("Bootstrap administrator already exists")
-        else:
-            ensure_bootstrap_admin(token)
+        print(
+            "WARNING: no bootstrap administrator configured; existing realm users are unchanged."
+        )
+    elif find_user(token, BOOTSTRAP_ADMIN_EMAIL):
+        print("Bootstrap administrator already exists")
+    else:
+        ensure_bootstrap_admin(token)
 
     if purge_requested:
         purge_demo_users(token)

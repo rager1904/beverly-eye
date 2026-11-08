@@ -78,9 +78,10 @@ The script:
 Store the bootstrap administrator password in a password manager. Remove
 `KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD` from the backend service after the account
 exists; it is only consumed once by `scripts/setup/setup_keycloak.py`. Keep
-`KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL` so later starts can confirm the administrator
-is present, and pass `-SkipBootstrapAdmin` on later runs so the script does not
-write a new bootstrap password.
+`KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL` and `KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME` so
+later starts can confirm the administrator is present, and pass
+`-SkipBootstrapAdmin` on later runs so the script does not write a new
+bootstrap password.
 
 Secrets that must agree across services:
 
@@ -96,13 +97,14 @@ Secrets that must agree across services:
 Run these steps in order. Steps 4 and 5 delete data and require explicit
 approval.
 
-1. **Choose the bootstrap administrator.** Provide an email/username and
-   password (or let the script generate one) that is not a demo account.
+1. **Choose the bootstrap administrator.** Provide an email and username (they
+   may differ) and password (or let the script generate one); neither may match
+   a demo account.
 2. **Write variables and rotate secrets.**
 
    ```powershell
    .\scripts\railway\set_production_vars.ps1 -Apply -RotateSecrets `
-       -BootstrapAdminEmail <admin-email>
+       -BootstrapAdminEmail <admin-email> -BootstrapAdminUsername <username>
    ```
 
 3. **Apply the partial and deploy the backend.** On startup the backend:

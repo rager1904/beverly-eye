@@ -28,7 +28,10 @@
     Public origin of the frontend, used for CORS and Keycloak redirect URIs.
 
 .PARAMETER BootstrapAdminEmail
-    Email/username of the first real administrator. Required with -Apply.
+    Email of the first real administrator. Required with -Apply.
+
+.PARAMETER BootstrapAdminUsername
+    Username of the first real administrator. Defaults to BootstrapAdminEmail.
 
 .PARAMETER BootstrapAdminPassword
     Password for the first real administrator. Generated when omitted and no
@@ -55,7 +58,8 @@
     Actually write the variables. Without it the script only prints the plan.
 
 .EXAMPLE
-    .\scripts\railway\set_production_vars.ps1 -BootstrapAdminEmail admin@example.org
+    .\scripts\railway\set_production_vars.ps1 -BootstrapAdminEmail admin@example.org `
+        -BootstrapAdminUsername admin
 
 .EXAMPLE
     .\scripts\railway\set_production_vars.ps1 -Apply -RotateSecrets `
@@ -67,6 +71,7 @@ param(
     [string]$EnvironmentName = "production",
     [string]$PublicAppUrl = "https://ubuntucare.up.railway.app",
     [string]$BootstrapAdminEmail = "",
+    [string]$BootstrapAdminUsername = "",
     [string]$BootstrapAdminPassword = "",
     [switch]$SkipBootstrapAdmin,
     [switch]$RotateSecrets,
@@ -164,6 +169,9 @@ function Get-RailwayVariableNames {
 if ($Apply -and -not $SkipBootstrapAdmin -and [string]::IsNullOrWhiteSpace($BootstrapAdminEmail)) {
     throw "BootstrapAdminEmail is required with -Apply so the first real administrator can be created."
 }
+if (-not $SkipBootstrapAdmin -and [string]::IsNullOrWhiteSpace($BootstrapAdminUsername)) {
+    $BootstrapAdminUsername = $BootstrapAdminEmail
+}
 
 $generatedAdminPassword = $false
 if (-not $SkipBootstrapAdmin -and [string]::IsNullOrWhiteSpace($BootstrapAdminPassword)) {
@@ -221,6 +229,7 @@ $backendPlain = [ordered]@{
 
 if (-not $SkipBootstrapAdmin -and -not [string]::IsNullOrWhiteSpace($BootstrapAdminEmail)) {
     $backendPlain["KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL"] = $BootstrapAdminEmail
+    $backendPlain["KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME"] = $BootstrapAdminUsername
 }
 
 Write-Host "Backend (non-secret)" -ForegroundColor Yellow

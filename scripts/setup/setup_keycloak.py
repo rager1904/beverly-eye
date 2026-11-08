@@ -45,6 +45,9 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "production").strip().lower()
 PUBLIC_APP_URL = os.getenv("UBUNTUCARE_PUBLIC_APP_URL", "").strip().rstrip("/")
 KEYCLOAK_PUBLIC_URL = os.getenv("KEYCLOAK_PUBLIC_URL", "").strip().rstrip("/")
 BOOTSTRAP_ADMIN_EMAIL = os.getenv("KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL", "").strip()
+BOOTSTRAP_ADMIN_USERNAME = os.getenv(
+    "KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME", BOOTSTRAP_ADMIN_EMAIL
+).strip()
 BOOTSTRAP_ADMIN_PASSWORD = os.getenv("KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD", "")
 BOOTSTRAP_ADMIN_NAME = os.getenv("KEYCLOAK_BOOTSTRAP_ADMIN_NAME", "System Administrator").strip()
 DEMO_USER_PASSWORD = os.getenv("KEYCLOAK_DEMO_USER_PASSWORD", "")
@@ -767,17 +770,21 @@ def ensure_bootstrap_admin(token: str) -> None:
     if not BOOTSTRAP_ADMIN_EMAIL and not BOOTSTRAP_ADMIN_PASSWORD:
         print("No bootstrap administrator configured")
         return
-    if not BOOTSTRAP_ADMIN_EMAIL or not BOOTSTRAP_ADMIN_PASSWORD:
+    if not BOOTSTRAP_ADMIN_EMAIL or not BOOTSTRAP_ADMIN_USERNAME or not BOOTSTRAP_ADMIN_PASSWORD:
         raise KeycloakSetupError(
-            "Set both KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL and KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD."
+            "Set KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL, KEYCLOAK_BOOTSTRAP_ADMIN_USERNAME, "
+            "and KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD."
         )
-    if find_user(token, BOOTSTRAP_ADMIN_EMAIL):
+    existing = find_user(token, BOOTSTRAP_ADMIN_USERNAME) or find_user_by_email(
+        token, BOOTSTRAP_ADMIN_EMAIL
+    )
+    if existing:
         print("Bootstrap administrator already exists")
         return
 
     parts = BOOTSTRAP_ADMIN_NAME.split(None, 1)
     user = {
-        "username": BOOTSTRAP_ADMIN_EMAIL,
+        "username": BOOTSTRAP_ADMIN_USERNAME,
         "email": BOOTSTRAP_ADMIN_EMAIL,
         "firstName": parts[0],
         "lastName": parts[1] if len(parts) > 1 else parts[0],
@@ -785,7 +792,10 @@ def ensure_bootstrap_admin(token: str) -> None:
         "roles": ["admin"],
     }
     ensure_user(token, user)
-    print(f"Created bootstrap administrator '{BOOTSTRAP_ADMIN_EMAIL}'")
+    print(
+        f"Created bootstrap administrator '{BOOTSTRAP_ADMIN_USERNAME}' "
+        f"({BOOTSTRAP_ADMIN_EMAIL})"
+    )
 
 
 def ensure_demo_users(token: str) -> None:
@@ -872,9 +882,13 @@ def main() -> int:
                 "KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL must be set before purging demo users."
             )
         demo_emails = {user["email"].lower() for user in DEMO_USERS}
-        if BOOTSTRAP_ADMIN_EMAIL.lower() in demo_emails:
+        demo_usernames = {user["username"].lower() for user in DEMO_USERS}
+        if (
+            BOOTSTRAP_ADMIN_EMAIL.lower() in demo_emails
+            or BOOTSTRAP_ADMIN_USERNAME.lower() in demo_usernames
+        ):
             raise SystemExit(
-                "KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL must not reuse a demo account email."
+                "Bootstrap administrator email/username must not reuse a demo account."
             )
 
     # Create the real administrator before removing the demo accounts so the
@@ -896,7 +910,9 @@ def main() -> int:
         print(
             "WARNING: no bootstrap administrator configured; existing realm users are unchanged."
         )
-    elif find_user(token, BOOTSTRAP_ADMIN_EMAIL):
+    elif find_user(token, BOOTSTRAP_ADMIN_USERNAME) or find_user_by_email(
+        token, BOOTSTRAP_ADMIN_EMAIL
+    ):
         print("Bootstrap administrator already exists")
     else:
         ensure_bootstrap_admin(token)

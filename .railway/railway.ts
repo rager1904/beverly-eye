@@ -116,7 +116,7 @@ export default defineRailway(() => {
     source: github(REPOSITORY, { branch: BRANCH }),
     build: {
       builder: "DOCKERFILE",
-      dockerfilePath: "deploy/railway/Dockerfile.backend",
+      dockerfilePath: "deploy/railway/Dockerfile",
     },
     // The gateway is the only process listening on the Railway port. The
     // entrypoint waits for Postgres/Redis/MinIO/Keycloak and applies Alembic
@@ -125,6 +125,7 @@ export default defineRailway(() => {
     healthcheckTimeout: 900,
     env: {
       PORT: "8000",
+      UBUNTUCARE_RAILWAY_ROLE: "backend",
       ENVIRONMENT: "development",
       SECRET_KEY: DEMO.appSecret,
       DATABASE_URL: postgres.env.DATABASE_URL,
@@ -162,12 +163,13 @@ export default defineRailway(() => {
     source: github(REPOSITORY, { branch: BRANCH }),
     build: {
       builder: "DOCKERFILE",
-      dockerfilePath: "deploy/railway/Dockerfile.frontend",
+      dockerfilePath: "deploy/railway/Dockerfile",
     },
     healthcheck: "/login",
     healthcheckTimeout: 300,
     env: {
       PORT: "3000",
+      UBUNTUCARE_RAILWAY_ROLE: "frontend",
       HOSTNAME: "0.0.0.0",
       NODE_ENV: "production",
       NEXT_TELEMETRY_DISABLED: "1",

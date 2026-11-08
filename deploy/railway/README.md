@@ -4,8 +4,10 @@ This deployment mirrors the core-service portion of the Colab demo. The
 `backend` service runs the eleven core FastAPI services, API gateway, Celery
 worker, and Celery beat in one container. AI services (agents, ASR, TTS, and
 RAG) are not started; their gateway routes return HTTP 503. The Next.js
-frontend is a separate service. PostgreSQL with pgvector, Redis, Keycloak, and
-MinIO are provisioned from `.railway/railway.ts`.
+frontend is a separate service. Both app services use the same
+`deploy/railway/Dockerfile`; `UBUNTUCARE_RAILWAY_ROLE` selects which process
+starts in each container. PostgreSQL with pgvector, Redis, Keycloak, and MinIO
+are provisioned from `.railway/railway.ts`.
 
 ## Important: demo configuration only
 
@@ -76,8 +78,8 @@ on port 8080, setting the frontend's **build-time**
 `NEXT_PUBLIC_KEYCLOAK_URL` to that HTTPS domain, and adding the frontend HTTPS
 origin and `/auth/callback` redirect URI to the Keycloak `frontend` client. In
 this Dockerfile-based setup, set `NEXT_PUBLIC_KEYCLOAK_URL` in the frontend
-builder stage of `deploy/railway/Dockerfile.frontend` and rebuild the frontend;
-a runtime-only variable does not change a value baked into a Next.js build.
+builder stage of `deploy/railway/Dockerfile` and rebuild the frontend; a
+runtime-only variable does not change a value baked into a Next.js build.
 Expose Keycloak only if that public endpoint is intentional; never point a
 browser at `keycloak.railway.internal`.
 

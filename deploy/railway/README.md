@@ -109,7 +109,7 @@ approval.
    - waits for PostgreSQL, Redis, MinIO, and Keycloak;
    - creates the `keycloak` database when `KEYCLOAK_DB_MANAGE=1`;
    - applies Alembic migrations (demo seeding is disabled);
-   - optionally purges demo data (step 5);
+   - optionally purges demo data (step 4);
    - ensures the MinIO bucket and provisions the Keycloak realm.
 4. **Purge demo data once.** Re-run the variable script with
    `-Apply -EnableDemoPurge` (no `-RotateSecrets`), deploy once, then re-run it
@@ -169,8 +169,8 @@ approval.
 | -------- | -------- |
 | `GET https://<frontend>/login` | 200 |
 | `GET http://backend.railway.internal:8000/health` | 200 |
-| `GET http://backend.railway.internal:8000/api/v1/health` | 200 |
-| Keycloak `/health/ready` | 200 |
+| `GET http://backend.railway.internal:8000/ready` | 200 |
+| Keycloak `/realms/master/.well-known/openid-configuration` | 200 |
 | MinIO `/minio/health/live` | 200 |
 
 Configure Railway health checks from the IaC and alert on failed deploys.
@@ -212,8 +212,8 @@ railway variables --service backend --kv
 - [ ] `SELECT count(*) FROM patients` returns `0` after the purge.
 - [ ] `SELECT count(*) FROM users WHERE username IN (...demo list...)` returns
       `0`.
-- [ ] `/health` and `/api/v1/health` return 200.
-- [ ] Keycloak `/health/ready` returns 200 and survives a restart.
+- [ ] Backend `/health` reports healthy and `/ready` returns 200.
+- [ ] Keycloak's master-realm discovery endpoint returns 200 and survives a restart.
 - [ ] MinIO health endpoint returns 200 and the `ubuntucare` bucket exists.
 - [ ] `UBUNTUCARE_PURGE_DEMO_DATA` and `UBUNTUCARE_PURGE_DEMO_USERS` are `0`
       after the cutover.

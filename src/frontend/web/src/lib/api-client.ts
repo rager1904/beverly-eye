@@ -6,6 +6,11 @@ interface RequestConfig extends RequestInit {
   skipAuth?: boolean;
 }
 
+// Keycloak rotates refresh tokens. All requests that expire together must
+// share one refresh request; parallel refreshes with the same token can revoke
+// the session and redirect the user while a form is being submitted.
+let refreshInFlight: { token: string; promise: Promise<boolean> } | null = null;
+
 class ApiClient {
   private baseUrl: string;
 
@@ -22,8 +27,9 @@ class ApiClient {
     return headers;
   }
 
-  private async request<T>(endpoint: string, config: RequestConfig = {}): Promise<T> {
+  async request<T>(endpoint: string, config: RequestConfig = {}): Promise<T> {
     const { skipAuth, ...fetchConfig } = config;
+    const tokenUsed = skipAuth ? null : useAuthStore.getState().accessToken;
     const headers = skipAuth ? {} : await this.getAuthHeaders();
 
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -31,18 +37,33 @@ class ApiClient {
       headers: { ...headers, ...fetchConfig.headers },
     });
 
-    if (response.status === 401) {
-      const refreshed = await this.refreshToken();
+    if (response.status === 401 && tokenUsed) {
+      // Another request may already have refreshed while this one was in
+      // flight. Retry with the newer token instead of rotating twice.
+      const currentToken = useAuthStore.getState().accessToken;
+      const refreshed = currentToken && currentToken !== tokenUsed
+        ? true
+        : await this.refreshToken();
       if (refreshed) {
         const newHeaders = await this.getAuthHeaders();
+        const retryToken = useAuthStore.getState().accessToken;
         const retryResponse = await fetch(`${this.baseUrl}${endpoint}`, {
           ...fetchConfig,
           headers: { ...newHeaders, ...fetchConfig.headers },
         });
+        if (retryResponse.status === 401) {
+          if (useAuthStore.getState().accessToken === retryToken) {
+            useAuthStore.getState().expireSession();
+          }
+          throw new Error('Session expired');
+        }
         if (!retryResponse.ok) throw await this.handleError(retryResponse);
+        if (retryResponse.status === 204) return undefined as T;
         return retryResponse.json();
       }
-      useAuthStore.getState().logout();
+      if (useAuthStore.getState().accessToken === tokenUsed) {
+        useAuthStore.getState().expireSession();
+      }
       throw new Error('Session expired');
     }
 
@@ -60,9 +81,21 @@ class ApiClient {
     }
   }
 
-  private async refreshToken(): Promise<boolean> {
+  private refreshToken(): Promise<boolean> {
     const refreshToken = useAuthStore.getState().refreshToken;
-    if (!refreshToken) return false;
+    if (!refreshToken) return Promise.resolve(false);
+    if (refreshInFlight?.token === refreshToken) return refreshInFlight.promise;
+
+    const promise = this.performTokenRefresh(refreshToken).finally(() => {
+      if (refreshInFlight?.promise === promise) {
+        refreshInFlight = null;
+      }
+    });
+    refreshInFlight = { token: refreshToken, promise };
+    return promise;
+  }
+
+  private async performTokenRefresh(refreshToken: string): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseUrl}/auth/refresh`, {
         method: 'POST',
@@ -71,6 +104,9 @@ class ApiClient {
       });
       if (!response.ok) return false;
       const data = await response.json();
+      // Do not resurrect a session if the user logged out or signed in as a
+      // different user while the refresh request was in flight.
+      if (useAuthStore.getState().refreshToken !== refreshToken) return false;
       useAuthStore.getState().setTokens(data.access_token, data.refresh_token);
       return true;
     } catch {
@@ -99,15 +135,44 @@ class ApiClient {
   }
 
   async upload<T>(endpoint: string, formData: FormData, config?: RequestConfig): Promise<T> {
+    const tokenUsed = config?.skipAuth ? null : useAuthStore.getState().accessToken;
     const headers = await this.getAuthHeaders();
     delete headers['Content-Type'];
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+    const requestConfig = {
       ...config,
       method: 'POST',
       headers: { ...headers, ...config?.headers },
       body: formData,
-    });
+    };
+    const response = await fetch(`${this.baseUrl}${endpoint}`, requestConfig);
+    if (response.status === 401 && tokenUsed) {
+      const currentToken = useAuthStore.getState().accessToken;
+      const refreshed = currentToken && currentToken !== tokenUsed
+        ? true
+        : await this.refreshToken();
+      if (refreshed) {
+        const retryHeaders = await this.getAuthHeaders();
+        delete retryHeaders['Content-Type'];
+        const retryToken = useAuthStore.getState().accessToken;
+        const retryResponse = await fetch(`${this.baseUrl}${endpoint}`, {
+          ...requestConfig,
+          headers: { ...retryHeaders, ...config?.headers },
+        });
+        if (retryResponse.status === 401 && useAuthStore.getState().accessToken === retryToken) {
+          useAuthStore.getState().expireSession();
+          throw new Error('Session expired');
+        }
+        if (!retryResponse.ok) throw await this.handleError(retryResponse);
+        if (retryResponse.status === 204) return undefined as T;
+        return retryResponse.json();
+      }
+      if (useAuthStore.getState().accessToken === tokenUsed) {
+        useAuthStore.getState().expireSession();
+      }
+      throw new Error('Session expired');
+    }
     if (!response.ok) throw await this.handleError(response);
+    if (response.status === 204) return undefined as T;
     return response.json();
   }
 }

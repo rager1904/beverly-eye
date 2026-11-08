@@ -44,7 +44,7 @@ const languages = [
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { user, accessToken, isAuthenticated, isLoading, logout, fetchUserProfile } = useAuthStore();
+  const { user, accessToken, isAuthenticated, isLoading, hasHydrated, logout, fetchUserProfile } = useAuthStore();
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useTranslation();
@@ -53,14 +53,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [langOpen, setLangOpen] = useState(false);
 
   useEffect(() => {
+    if (!hasHydrated) return;
     if (isAuthenticated && accessToken && !user && !isLoading) {
-      fetchUserProfile().catch(() => router.push('/login'));
+      fetchUserProfile().catch(() => router.replace('/login'));
       return;
     }
-    if (!isAuthenticated && !isLoading) router.push('/login');
-  }, [accessToken, fetchUserProfile, isAuthenticated, isLoading, router, user]);
+    if (!isAuthenticated && !isLoading) router.replace('/login');
+  }, [accessToken, fetchUserProfile, hasHydrated, isAuthenticated, isLoading, router, user]);
 
-  if (!user) {
+  if (!hasHydrated || isLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-sm text-muted-foreground">Loading your dashboard...</div>
@@ -163,7 +164,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
               </div>
 
-              <Button variant="ghost" size="icon" onClick={logout} className="text-muted-foreground hover:text-red-500">
+              <Button variant="ghost" size="icon" onClick={() => void logout()} className="text-muted-foreground hover:text-red-500">
                 <LogOut className="h-5 w-5" />
               </Button>
             </div>

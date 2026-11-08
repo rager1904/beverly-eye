@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,25 +13,20 @@ const wards = ['General Ward', 'Maternity', 'Pediatrics', 'ICU', 'Surgical', 'Is
 const facilities = ['UTH Lusaka', 'Chainama Clinic', 'Ndola Teaching Hospital', 'Chipata General', 'Livingstone Central'];
 
 export default function TransferPatientPage() {
-  const router = useRouter();
   const [patientName, setPatientName] = useState('');
   const [patientId, setPatientId] = useState('');
   const [fromWard, setFromWard] = useState('');
   const [toFacility, setToFacility] = useState('');
   const [toWard, setToWard] = useState('');
   const [transferReason, setTransferReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!patientName || !fromWard || !toWard) {
       toast.error('Please fill in patient name and wards');
       return;
     }
-    setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 800));
-    toast.success('Patient transfer initiated');
-    router.push('/hospital');
+    toast.error('Transfer is not connected to the server yet. No transfer was saved.');
   };
 
   return (
@@ -49,6 +43,7 @@ export default function TransferPatientPage() {
             Transfer Patient
           </h1>
           <p className="text-muted-foreground">Transfer a patient between wards or facilities</p>
+          <p role="status" className="mt-1 text-sm text-amber-700">Transfers cannot be submitted yet; the backend does not have a patient-transfer endpoint.</p>
         </div>
       </div>
 
@@ -122,8 +117,8 @@ export default function TransferPatientPage() {
             </div>
 
             <div className="flex gap-3 pt-2">
-              <Button type="submit" className="bg-healthcare-green hover:bg-healthcare-green-dark" disabled={submitting}>
-                {submitting ? 'Processing...' : 'Transfer Patient'}
+              <Button type="submit" className="bg-healthcare-green hover:bg-healthcare-green-dark">
+                Transfer Patient
               </Button>
               <Button type="button" variant="outline" asChild>
                 <Link href="/hospital">Cancel</Link>

@@ -11,6 +11,26 @@ export function PatientPicker({ value, onChange }: { value: string; onChange: (i
   const [patients, setPatients] = useState<Patient[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!value || patients.some((patient) => patient.id === value)) return;
+    const controller = new AbortController();
+    clinicalApi<Patient>(`emr/patients/${encodeURIComponent(value)}`, { signal: controller.signal })
+      .then((patient) => {
+        if (!controller.signal.aborted) {
+          setPatients((current) => current.some((item) => item.id === patient.id)
+            ? current
+            : [patient, ...current]);
+        }
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) {
+          setError(err instanceof Error ? err.message : 'Unable to load selected patient');
+        }
+      });
+    return () => controller.abort();
+  }, [value, patients]);
+
   useEffect(() => {
     const controller = new AbortController();
     const timer = setTimeout(async () => {

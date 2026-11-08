@@ -5,32 +5,32 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Building2, ArrowLeft, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-
-const dischargeReasons = ['Recovered', 'Transferred', 'Against Medical Advice', 'Deceased', 'Self-Discharge', 'Referred'];
+import { api } from '@/lib/api-client';
 
 export default function DischargePatientPage() {
   const router = useRouter();
-  const [patientName, setPatientName] = useState('');
-  const [patientId, setPatientId] = useState('');
-  const [reason, setReason] = useState('');
-  const [dischargeNotes, setDischargeNotes] = useState('');
-  const [followUpDate, setFollowUpDate] = useState('');
+  const [encounterId, setEncounterId] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!patientName || !reason) {
-      toast.error('Please fill in patient name and discharge reason');
+    if (!encounterId.trim()) {
+      toast.error('Enter the active encounter ID');
       return;
     }
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 800));
-    toast.success('Patient discharged successfully');
-    router.push('/hospital');
+    try {
+      await api.post(`/emr/encounters/${encodeURIComponent(encounterId.trim())}/discharge`);
+      toast.success('Patient discharged successfully');
+      router.push('/emr');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to discharge patient');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -56,41 +56,10 @@ export default function DischargePatientPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Patient Name *</label>
-                <Input placeholder="Full name" value={patientName} onChange={(e) => setPatientName(e.target.value)} required />
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Patient ID / NUPN</label>
-                <Input placeholder="e.g. P001" value={patientId} onChange={(e) => setPatientId(e.target.value)} />
-              </div>
-            </div>
-
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Discharge Reason *</label>
-              <div className="flex flex-wrap gap-2">
-                {dischargeReasons.map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => setReason(r)}
-                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${reason === r ? 'bg-healthcare-green/10 border-healthcare-green text-healthcare-green' : 'bg-background hover:bg-accent'}`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Discharge Summary / Notes</label>
-              <Textarea placeholder="Summary of hospital stay, treatment provided, and discharge instructions..." value={dischargeNotes} onChange={(e) => setDischargeNotes(e.target.value)} rows={4} />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Follow-up Appointment</label>
-              <Input type="date" value={followUpDate} onChange={(e) => setFollowUpDate(e.target.value)} />
+              <label className="text-sm font-medium mb-1.5 block">Active Encounter ID *</label>
+              <Input placeholder="Encounter UUID from the patient record" value={encounterId} onChange={(e) => setEncounterId(e.target.value)} required />
+              <p className="mt-1 text-xs text-muted-foreground">Only an encounter ID is accepted here; the discharge is saved before this page navigates away.</p>
             </div>
 
             <div className="flex gap-3 pt-2">

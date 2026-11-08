@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,36 +9,124 @@ import { Textarea } from '@/components/ui/textarea';
 import { FileText, ArrowLeft, User, Save } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { api } from '@/lib/api-client';
+
+interface PatientRecord {
+  id: string;
+  smartcare_id?: string | null;
+  first_name: string;
+  last_name: string;
+  date_of_birth: string;
+  gender: string;
+  phone: string;
+  address_line?: string | null;
+  district?: string | null;
+  province?: string | null;
+}
+
+const provinces = [
+  { value: 'Lusaka', label: 'Lusaka' },
+  { value: 'Copperbelt', label: 'Copperbelt' },
+  { value: 'Central', label: 'Central' },
+  { value: 'Eastern', label: 'Eastern' },
+  { value: 'Northern', label: 'Northern' },
+  { value: 'Luapula', label: 'Luapula' },
+  { value: 'Muchinga', label: 'Muchinga' },
+  { value: 'Southern', label: 'Southern' },
+  { value: 'Western', label: 'Western' },
+  { value: 'North_Western', label: 'North-Western' },
+];
 
 export default function EditPatientPage() {
   const router = useRouter();
-  const [name, setName] = useState('Grace Banda');
-  const [nupn, setNupn] = useState('ZM-1985-06-15-00234');
-  const [dateOfBirth, setDateOfBirth] = useState('1985-06-15');
-  const [gender, setGender] = useState('female');
-  const [bloodType, setBloodType] = useState('O+');
-  const [phone, setPhone] = useState('+260 97 123 4567');
-  const [address, setAddress] = useState('123 Freedom Way, Lusaka');
-  const [district, setDistrict] = useState('Lusaka');
-  const [province, setProvince] = useState('Lusaka');
-  const [allergies, setAllergies] = useState('Penicillin, Sulfa');
-  const [chronicConditions, setChronicConditions] = useState('Hypertension, Type 2 Diabetes');
+  const [patientId, setPatientId] = useState('');
+  const [name, setName] = useState('');
+  const [nupn, setNupn] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [gender, setGender] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [district, setDistrict] = useState('');
+  const [province, setProvince] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('id');
+    if (!id) {
+      setLoadError('Open this page from a patient record to edit a specific patient.');
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setPatientId(id);
+    api.get<PatientRecord>(`/emr/patients/${encodeURIComponent(id)}`, { signal: controller.signal })
+      .then((patient) => {
+        setName([patient.first_name, patient.last_name].filter(Boolean).join(' '));
+        setNupn(patient.smartcare_id || '');
+        setDateOfBirth(patient.date_of_birth?.slice(0, 10) || '');
+        setGender(patient.gender || '');
+        setPhone(patient.phone || '');
+        setAddress(patient.address_line || '');
+        setDistrict(patient.district || '');
+        setProvince(patient.province || '');
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setLoadError(error instanceof Error ? error.message : 'Unable to load patient');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name) {
-      toast.error('Patient name is required');
+    const [firstName, ...lastNameParts] = name.trim().split(/\s+/);
+    const lastName = lastNameParts.join(' ');
+    if (!patientId || !firstName || !lastName) {
+      toast.error('Enter the patient’s first and last name');
       return;
     }
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 800));
-    toast.success('Patient information updated');
-    router.push('/emr');
+    try {
+      await api.patch(`/emr/patients/${encodeURIComponent(patientId)}`, {
+        smartcare_id: nupn || null,
+        first_name: firstName,
+        last_name: lastName,
+        date_of_birth: dateOfBirth || undefined,
+        gender: gender || undefined,
+        phone: phone || undefined,
+        address_line: address || null,
+        district: district || null,
+        province: province || null,
+      });
+      toast.success('Patient information updated');
+      router.push(`/patient/${patientId}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update patient');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
-  const provinces = ['Lusaka', 'Copperbelt', 'Central', 'Eastern', 'Northern', 'Luapula', 'Muchinga', 'Southern', 'Western', 'North-Western'];
+  if (loading) {
+    return <div className="flex min-h-64 items-center justify-center text-sm text-muted-foreground">Loading patient record…</div>;
+  }
+
+  if (loadError || !patientId) {
+    return (
+      <div role="alert" className="space-y-3 rounded-md border p-4 text-sm">
+        <p>{loadError || 'Open this page from a patient record to edit a specific patient.'}</p>
+        <Button variant="outline" asChild><Link href="/emr">Back to EMR</Link></Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -53,7 +141,7 @@ export default function EditPatientPage() {
             <User className="h-6 w-6 text-healthcare-blue" />
             Edit Patient Information
           </h1>
-          <p className="text-muted-foreground">Update patient demographics and medical information</p>
+          <p className="text-muted-foreground">Update the selected patient’s saved demographics</p>
         </div>
       </div>
 
@@ -69,7 +157,7 @@ export default function EditPatientPage() {
                 <Input value={name} onChange={(e) => setName(e.target.value)} required />
               </div>
               <div>
-                <label className="text-sm font-medium mb-1.5 block">NUPN</label>
+                <label className="text-sm font-medium mb-1.5 block">SmartCare ID / NUPN</label>
                 <Input value={nupn} onChange={(e) => setNupn(e.target.value)} />
               </div>
             </div>
@@ -96,26 +184,9 @@ export default function EditPatientPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Blood Type</label>
-                <div className="flex flex-wrap gap-1">
-                  {bloodTypes.map((b) => (
-                    <button
-                      key={b}
-                      type="button"
-                      onClick={() => setBloodType(b)}
-                      className={`w-10 h-10 rounded-lg border text-xs font-medium transition-colors ${bloodType === b ? 'bg-red-50 border-red-300 text-red-600' : 'bg-background hover:bg-accent'}`}
-                    >
-                      {b}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-sm font-medium mb-1.5 block">Phone</label>
-                <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-              </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Phone</label>
+              <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
             </div>
 
             <div>
@@ -135,23 +206,14 @@ export default function EditPatientPage() {
                   onChange={(e) => setProvince(e.target.value)}
                   className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm"
                 >
-                  {provinces.map((p) => (<option key={p} value={p}>{p}</option>))}
+                  <option value="">Select province</option>
+                  {provinces.map((p) => (<option key={p.value} value={p.value}>{p.label}</option>))}
                 </select>
               </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Allergies (comma-separated)</label>
-              <Input value={allergies} onChange={(e) => setAllergies(e.target.value)} placeholder="e.g. Penicillin, Sulfa" />
-            </div>
-
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Chronic Conditions (comma-separated)</label>
-              <Input value={chronicConditions} onChange={(e) => setChronicConditions(e.target.value)} placeholder="e.g. Hypertension, Diabetes" />
-            </div>
-
             <div className="flex gap-3 pt-2">
-              <Button type="submit" className="bg-healthcare-green hover:bg-healthcare-green-dark" disabled={submitting}>
+              <Button type="submit" className="bg-healthcare-green hover:bg-healthcare-green-dark" disabled={submitting || loading}>
                 <Save className="h-4 w-4 mr-1" />{submitting ? 'Saving...' : 'Save Changes'}
               </Button>
               <Button type="button" variant="outline" asChild>

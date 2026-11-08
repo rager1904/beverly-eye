@@ -10,6 +10,7 @@ interface AuthState {
   refreshToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  hasHydrated: boolean;
   login: (email: string, password: string) => Promise<void>;
   loginWithKeycloak: () => void;
   logout: () => Promise<void>;
@@ -18,6 +19,8 @@ interface AuthState {
   hasRole: (roles: UserRole | UserRole[]) => boolean;
   handleKeycloakCallback: (code: string) => Promise<void>;
   fetchUserProfile: () => Promise<void>;
+  expireSession: () => void;
+  setHasHydrated: (value: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -28,6 +31,17 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       isAuthenticated: false,
       isLoading: false,
+      hasHydrated: false,
+
+      setHasHydrated: (hasHydrated: boolean) => set({ hasHydrated }),
+
+      expireSession: () => set({
+        user: null,
+        accessToken: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        isLoading: false,
+      }),
 
       login: async (email: string, password: string) => {
         set({ isLoading: true });
@@ -70,23 +84,18 @@ export const useAuthStore = create<AuthState>()(
 
       logout: async () => {
         const { refreshToken } = get();
-        try {
-          if (refreshToken) {
+        get().expireSession();
+        if (refreshToken) {
+          try {
             await fetch(`${API_BASE}/auth/logout`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ refresh_token: refreshToken }),
+              keepalive: true,
             });
+          } catch {
+            // Local logout must not wait for the authentication service.
           }
-        } finally {
-          set({
-            user: null,
-            accessToken: null,
-            refreshToken: null,
-            isAuthenticated: false,
-            isLoading: false,
-          });
-          window.location.href = '/login';
         }
       },
 
@@ -160,17 +169,11 @@ export const useAuthStore = create<AuthState>()(
               isLoading: false,
             });
           } else {
-            set({
-              user: null,
-              accessToken: null,
-              refreshToken: null,
-              isAuthenticated: false,
-              isLoading: false,
-            });
+            get().expireSession();
             throw new Error(response.status === 401 ? 'Session expired' : 'Unable to load user profile');
           }
         } catch (error) {
-          set({ user: null, isAuthenticated: false, isLoading: false });
+          get().expireSession();
           throw error;
         }
       },
@@ -183,6 +186,10 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
+      skipHydration: true,
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

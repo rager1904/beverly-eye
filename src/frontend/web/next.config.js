@@ -2,16 +2,18 @@ const withPWA = require('next-pwa')({
   dest: 'public',
   disable: process.env.NODE_ENV === 'development',
   register: true,
-  skipWaiting: true,
+  // Let an open session finish before a new worker takes control. This avoids
+  // swapping page/network behavior during a clinical workflow.
+  skipWaiting: false,
+  clientsClaim: false,
+  // Restoring network connectivity must not discard an in-progress form.
+  reloadOnOnline: false,
   runtimeCaching: [
     {
       urlPattern: /^https?.*\/api\/v1\/.*/i,
-      handler: 'NetworkFirst',
-      options: {
-        cacheName: 'api-cache',
-        expiration: { maxEntries: 100, maxAgeSeconds: 60 * 60 * 24 },
-        networkTimeoutSeconds: 10,
-      },
+      // Clinical and authentication responses must never be replayed from a
+      // browser cache when the API is slow or unavailable.
+      handler: 'NetworkOnly',
     },
     {
       urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
@@ -20,8 +22,7 @@ const withPWA = require('next-pwa')({
     },
     {
       urlPattern: /^https?.*/i,
-      handler: 'NetworkFirst',
-      options: { cacheName: 'offline-cache', expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 } },
+      handler: 'NetworkOnly',
     },
   ],
 });

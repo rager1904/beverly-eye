@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -9,26 +9,51 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar, ArrowLeft, Video, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { PatientPicker } from '@/components/PatientPicker';
+import { useCreateAppointment } from '@/hooks/useAppointments';
 
 export default function NewAppointmentPage() {
   const router = useRouter();
-  const [patientName, setPatientName] = useState('');
+  const createAppointment = useCreateAppointment();
+  const [patientId, setPatientId] = useState('');
   const [appointmentType, setAppointmentType] = useState('in-person');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const patient = new URLSearchParams(window.location.search).get('patient');
+    if (patient) setPatientId(patient);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!patientName || !date || !time) {
+    if (!patientId || !date || !time) {
       toast.error('Please fill in all required fields');
       return;
     }
-    setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 800));
-    toast.success('Appointment created successfully');
-    router.push('/appointments');
+    const startsAt = new Date(`${date}T${time}:00`);
+    const endsAt = new Date(startsAt.getTime() + 30 * 60 * 1000);
+    if (endsAt.toDateString() !== startsAt.toDateString()) {
+      toast.error('Choose a start time that allows the 30-minute appointment to finish that day');
+      return;
+    }
+
+    try {
+      await createAppointment.mutateAsync({
+        patient_id: patientId,
+        appointment_type: appointmentType === 'telemedicine' ? 'telemedicine' : 'general',
+        appointment_date: date,
+        start_time: time,
+        end_time: endsAt.toTimeString().slice(0, 5),
+        duration_minutes: 30,
+        reason: reason || undefined,
+      });
+      toast.success('Appointment created successfully');
+      router.push('/appointments');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to create appointment');
+    }
   };
 
   return (
@@ -55,13 +80,7 @@ export default function NewAppointmentPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Patient Name *</label>
-              <Input
-                placeholder="Search or enter patient name"
-                value={patientName}
-                onChange={(e) => setPatientName(e.target.value)}
-                required
-              />
+              <PatientPicker value={patientId} onChange={setPatientId} />
             </div>
 
             <div>
@@ -106,8 +125,8 @@ export default function NewAppointmentPage() {
             </div>
 
             <div className="flex gap-3 pt-2">
-              <Button type="submit" className="bg-healthcare-green hover:bg-healthcare-green-dark" disabled={submitting}>
-                {submitting ? 'Creating...' : 'Create Appointment'}
+              <Button type="submit" className="bg-healthcare-green hover:bg-healthcare-green-dark" disabled={createAppointment.isPending}>
+                {createAppointment.isPending ? 'Creating...' : 'Create Appointment'}
               </Button>
               <Button type="button" variant="outline" asChild>
                 <Link href="/appointments">Cancel</Link>

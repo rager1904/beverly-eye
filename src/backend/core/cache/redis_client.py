@@ -23,6 +23,7 @@ class RedisClient:
             return
         self._pool = ConnectionPool.from_url(
             settings.redis_url,
+            max_connections=settings.REDIS_MAX_CONNECTIONS,
             socket_timeout=settings.REDIS_SOCKET_TIMEOUT,
             retry_on_timeout=True,
             decode_responses=True,

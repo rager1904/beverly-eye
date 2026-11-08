@@ -25,6 +25,7 @@ engine = create_async_engine(
     pool_recycle=settings.POSTGRES_POOL_RECYCLE,
     echo=settings.POSTGRES_ECHO,
     pool_pre_ping=True,
+    pool_use_lifo=True,
 )
 
 async_session_factory = async_sessionmaker(

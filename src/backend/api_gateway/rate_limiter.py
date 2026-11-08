@@ -1,10 +1,23 @@
 import asyncio
 import logging
+import re
 import time
 from collections import defaultdict
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+_UUID_PATH_SEGMENT = re.compile(
+    r"/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=/|$)",
+    re.IGNORECASE,
+)
+_NUMERIC_PATH_SEGMENT = re.compile(r"/\d+(?=/|$)")
+
+
+def _normalize_path(path: str) -> str:
+    """Collapse identifier segments so user-specific routes don't leak buckets."""
+    path = _UUID_PATH_SEGMENT.sub("/:id", path)
+    return _NUMERIC_PATH_SEGMENT.sub("/:id", path)
 
 
 class TokenBucket:
@@ -76,6 +89,7 @@ class RateLimiter:
     async def check(
         self, user_id: str, roles: list[str], path: str
     ) -> tuple[bool, int, int, int]:
+        bucket_path = _normalize_path(path)
         role_key = self._get_role_bucket(user_id, roles)
         limits = DEFAULT_LIMITS.get(role_key, DEFAULT_LIMITS["default"])
         rps = limits["requests_per_second"]
@@ -86,9 +100,9 @@ class RateLimiter:
         burst = min(burst, endpoint_burst)
 
         if self._use_redis and self._redis:
-            return await self._check_redis(user_id, path, rps, burst)
+            return await self._check_redis(user_id, bucket_path, rps, burst)
 
-        return self._check_local(user_id, role_key, path, rps, burst)
+        return self._check_local(user_id, role_key, bucket_path, rps, burst)
 
     def _check_local(
         self, user_id: str, role_key: str, path: str, rps: int, burst: int

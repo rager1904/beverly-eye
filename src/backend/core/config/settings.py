@@ -43,9 +43,12 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "ubuntucare"
     POSTGRES_PASSWORD: str = "ubuntucare"
     POSTGRES_DB: str = "ubuntucare"
-    POSTGRES_POOL_SIZE: int = 20
-    POSTGRES_MAX_OVERFLOW: int = 10
-    POSTGRES_POOL_TIMEOUT: int = 30
+    # Each Railway API process owns an engine. Keep pools bounded across the
+    # single-container deployment so aggregate connections stay below the
+    # Postgres service limit during traffic bursts.
+    POSTGRES_POOL_SIZE: int = 4
+    POSTGRES_MAX_OVERFLOW: int = 1
+    POSTGRES_POOL_TIMEOUT: int = 10
     POSTGRES_POOL_RECYCLE: int = 1800
     POSTGRES_ECHO: bool = False
 
@@ -76,6 +79,7 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
     REDIS_SOCKET_TIMEOUT: int = 5
     REDIS_RETRY_COUNT: int = 3
+    REDIS_MAX_CONNECTIONS: int = 20
 
     @property
     def redis_url(self) -> str:

@@ -8,6 +8,9 @@ const withPWA = require('next-pwa')({
   clientsClaim: false,
   // Restoring network connectivity must not discard an in-progress form.
   reloadOnOnline: false,
+  // Remove old versions' cached API/route data when the replacement worker
+  // activates; those caches may contain patient-specific responses.
+  importScripts: ['/clear-sensitive-caches.js'],
   runtimeCaching: [
     {
       urlPattern: /^https?.*\/api\/v1\/.*/i,

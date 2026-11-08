@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator
@@ -9,6 +10,7 @@ import prometheus_client
 import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 from prometheus_client import Counter, Gauge, Histogram
 from prometheus_client.exposition import generate_latest
@@ -44,12 +46,34 @@ SERVICES = [
 GLOBAL_TIMEOUT = 300
 
 _engine: Any | None = None
+_UUID_PATH_SEGMENT = re.compile(
+    r"/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?=/|$)",
+    re.IGNORECASE,
+)
+_NUMERIC_PATH_SEGMENT = re.compile(r"/\d+(?=/|$)")
+
+
+def _metrics_endpoint(request: Request) -> str:
+    route = request.scope.get("route")
+    route_template = getattr(route, "path", None)
+    if route_template:
+        return route_template
+    path = _UUID_PATH_SEGMENT.sub("/:id", request.url.path)
+    return _NUMERIC_PATH_SEGMENT.sub("/:id", path)
 
 
 async def get_db_engine():
     global _engine
     if _engine is None:
-        _engine = create_async_engine(settings.database_url, pool_pre_ping=True)
+        _engine = create_async_engine(
+            settings.database_url,
+            pool_size=2,
+            max_overflow=1,
+            pool_timeout=5,
+            pool_recycle=1800,
+            pool_pre_ping=True,
+            pool_use_lifo=True,
+        )
     return _engine
 
 
@@ -145,6 +169,7 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["X-Request-ID", "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset"],
 )
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(LoggingMiddleware)
 app.add_middleware(AuthenticationMiddleware)
@@ -162,16 +187,15 @@ async def metrics_middleware(request: Request, call_next) -> Response:
         return await call_next(request)
     active_connections.inc()
     method = request.method
-    endpoint = request.url.path
     start = time.time()
+    response_status = 500
     try:
         response = await call_next(request)
-        request_count.labels(method=method, endpoint=endpoint, status=response.status_code).inc()
+        response_status = response.status_code
         return response
-    except Exception as exc:
-        request_count.labels(method=method, endpoint=endpoint, status=500).inc()
-        raise
     finally:
+        endpoint = _metrics_endpoint(request)
+        request_count.labels(method=method, endpoint=endpoint, status=str(response_status)).inc()
         request_duration.labels(method=method, endpoint=endpoint).observe(time.time() - start)
         active_connections.dec()
 

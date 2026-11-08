@@ -1,19 +1,24 @@
 /**
- * UbuntuCare on Railway.
+ * UbuntuCare on Railway - full-project reference.
  *
- * This is the Infrastructure-as-Code definition consumed by:
+ * NOT the file that is applied to the live project. The live project was
+ * imported incrementally and only the `ubuntucare-app-dependencies` partial
+ * (`railway.dependencies.ts`) is authoritative while the project is in a
+ * partially-imported state (`wholeProjectAvailable: false`).
  *
- *   railway config plan
- *   railway config apply
+ * This file documents the complete desired production topology so a fresh
+ * project can be recreated. It contains no committed credentials: secret
+ * variables use `preserve()` and must be seeded/rotated out of band with
+ * `scripts/railway/set_production_vars.ps1`.
  *
- * The layout mirrors the Colab demo: one backend container runs the eleven
- * core FastAPI services, the API gateway, and the Celery worker/beat. AI
- * services (agents, ASR, TTS, RAG) are deliberately not started and their
- * gateway routes answer HTTP 503.
+ * Layout: one backend container runs the eleven core FastAPI services, the API
+ * gateway, and the Celery worker/beat. AI services (agents, ASR, TTS, RAG) are
+ * deliberately not started and their gateway routes answer HTTP 503.
  *
  * IMPORTANT: the frontend is built with API_INTERNAL_URL pointing at
  * http://backend.railway.internal:8000, so the service below must keep the
- * name "backend".
+ * name "backend". Cross-service references use the live, case-sensitive
+ * service names "Postgres" and "Redis".
  */
 import {
   database,
@@ -21,56 +26,53 @@ import {
   github,
   group,
   image,
+  preserve,
   project,
-  redis,
   service,
   volume,
 } from "railway/iac";
 
 const REPOSITORY = "rager1904/beverly-eye";
 const BRANCH = "main";
-
-/**
- * Demo-only credentials. They are committed on purpose so the backend,
- * Keycloak, and MinIO agree on first boot without any dashboard copying.
- * Replace every value before using this project for anything real.
- */
-const DEMO = {
-  appSecret: "ubuntucare-railway-demo-app-secret-replace-before-production-0001",
-  keycloakAdminPassword: "UbuntuCare-Railway-Keycloak-Admin-2024!",
-  keycloakClientSecret: "ubuntucare-railway-api-gateway-client-secret-2024",
-  minioRootPassword: "UbuntuCare-Railway-MinIO-Root-2024!",
-  demoUserPassword: "UbuntuCare2024!",
-} as const;
+const PUBLIC_APP_URL = "https://ubuntucare.up.railway.app";
 
 export default defineRailway(() => {
   // ---------------------------------------------------------------------------
   // Data services
   // ---------------------------------------------------------------------------
 
-  // Railway's managed Postgres image does not ship pgvector. Use the pgvector
-  // image while keeping Railway's database intent (URL variable + durable
-  // volume). The runtime normalizes the plain postgresql:// URL to asyncpg.
-  const postgres = database("postgres", "postgres", {
-    image: "pgvector/pgvector:pg15",
+  // Railway's managed PostgreSQL image, which ships pgvector. The backend
+  // startup normalizes the plain postgresql:// URL to the asyncpg driver.
+  const postgres = database("Postgres", "postgres", {
+    image: "ghcr.io/railwayapp-templates/postgres-ssl:18",
     output: "DATABASE_URL",
     defaultMountPath: "/var/lib/postgresql/data",
   });
 
   // Celery broker/result backend and core-service cache.
-  const cache = redis("redis");
+  const cache = database("Redis", "redis", {
+    image: "redis:8.2",
+    output: "REDIS_URL",
+  });
 
   // ---------------------------------------------------------------------------
-  // Object storage (Colab parity)
+  // Object storage
   // ---------------------------------------------------------------------------
 
   const minioData = volume("minio-data", {
     sizeMB: 1024,
+    region: "sfo",
   });
 
+  // Built from the repository so the image always contains a `minio` binary at
+  // a known path instead of depending on a Docker Hub tag being republished.
   const minio = service("minio", {
-    source: image("minio/minio:RELEASE.2024-01-16T16-07-38Z"),
-    start: "server /data --console-address :9001",
+    source: github(REPOSITORY, { branch: BRANCH }),
+    build: {
+      builder: "DOCKERFILE",
+      dockerfilePath: "deploy/railway/minio/Dockerfile",
+    },
+    start: "/usr/local/bin/minio server /data --console-address :9001",
     healthcheck: "/minio/health/live",
     healthcheckTimeout: 180,
     volumeMounts: {
@@ -79,55 +81,65 @@ export default defineRailway(() => {
     env: {
       PORT: "9000",
       MINIO_ROOT_USER: "ubuntucare",
-      MINIO_ROOT_PASSWORD: DEMO.minioRootPassword,
+      MINIO_ROOT_PASSWORD: preserve(),
       MINIO_BROWSER: "off",
     },
   });
 
   // ---------------------------------------------------------------------------
-  // Authentication (Keycloak, H2 backed)
+  // Authentication (Keycloak, PostgreSQL backed)
   // ---------------------------------------------------------------------------
-
-  // start-dev keeps the demo self contained. H2 data is ephemeral, and the
-  // backend entrypoint re-provisions the realm and demo users idempotently on
-  // every deploy, so no Keycloak volume is required.
+  //
+  // Production mode against a dedicated `keycloak` database on the Postgres
+  // service. The backend creates that database on first boot when
+  // KEYCLOAK_DB_MANAGE=1. The realm is provisioned idempotently by
+  // scripts/setup/setup_keycloak.py; demo users are disabled in production.
   const keycloak = service("keycloak", {
     source: image("quay.io/keycloak/keycloak:23.0.7"),
-    start: "start-dev --http-port=8080",
+    start: "/opt/keycloak/bin/kc.sh start --http-port=8080 --hostname-strict=false",
     healthcheck: "/realms/master/.well-known/openid-configuration",
-    healthcheckTimeout: 300,
+    healthcheckTimeout: 600,
     env: {
       PORT: "8080",
       KEYCLOAK_ADMIN: "admin",
-      KEYCLOAK_ADMIN_PASSWORD: DEMO.keycloakAdminPassword,
+      KEYCLOAK_ADMIN_PASSWORD: preserve(),
       KC_HTTP_ENABLED: "true",
       KC_HOSTNAME_STRICT: "false",
       KC_HEALTH_ENABLED: "true",
+      KC_METRICS_ENABLED: "true",
       KC_LOG_LEVEL: "INFO",
-      JAVA_OPTS_KC_HEAP: "-Xms64m -Xmx512m",
+      KC_DB: "postgres",
+      KC_DB_URL: "jdbc:postgresql://${{Postgres.PGHOST}}:${{Postgres.PGPORT}}/keycloak",
+      KC_DB_USERNAME: "${{Postgres.PGUSER}}",
+      KC_DB_PASSWORD: "${{Postgres.PGPASSWORD}}",
+      JAVA_OPTS_APPEND: "-Djava.net.preferIPv4Stack=true",
+      JAVA_OPTS_KC_HEAP: "-Xms128m -Xmx768m",
     },
   });
 
   // ---------------------------------------------------------------------------
   // Application backend
   // ---------------------------------------------------------------------------
-
+  //
+  // The gateway is the only process listening on the Railway port. The
+  // entrypoint waits for Postgres/Redis/MinIO/Keycloak, creates the Keycloak
+  // database, applies Alembic migrations, and then starts supervisord.
   const backend = service("backend", {
     source: github(REPOSITORY, { branch: BRANCH }),
     build: {
       builder: "DOCKERFILE",
       dockerfilePath: "deploy/railway/Dockerfile",
     },
-    // The gateway is the only process listening on the Railway port. The
-    // entrypoint waits for Postgres/Redis/MinIO/Keycloak and applies Alembic
-    // migrations before supervisord starts the services.
     healthcheck: "/health",
     healthcheckTimeout: 900,
     env: {
       PORT: "8000",
       UBUNTUCARE_RAILWAY_ROLE: "backend",
-      ENVIRONMENT: "development",
-      SECRET_KEY: DEMO.appSecret,
+      ENVIRONMENT: "production",
+      DEBUG: "false",
+      SECRET_KEY: preserve(),
+      CORS_ORIGINS: PUBLIC_APP_URL,
+
       DATABASE_URL: postgres.env.DATABASE_URL,
       REDIS_URL: cache.env.REDIS_URL,
       CELERY_BROKER_URL: cache.env.REDIS_URL,
@@ -137,14 +149,23 @@ export default defineRailway(() => {
       KEYCLOAK_REALM: "ubuntucare",
       KEYCLOAK_CLIENT_ID: "api-gateway",
       KEYCLOAK_FRONTEND_CLIENT_ID: "frontend",
-      KEYCLOAK_CLIENT_SECRET: DEMO.keycloakClientSecret,
+      KEYCLOAK_CLIENT_SECRET: preserve(),
       KEYCLOAK_ADMIN_USER: "admin",
-      KEYCLOAK_ADMIN_PASSWORD: DEMO.keycloakAdminPassword,
-      KEYCLOAK_DEMO_USER_PASSWORD: DEMO.demoUserPassword,
+      KEYCLOAK_ADMIN_PASSWORD: preserve(),
+      KEYCLOAK_DB_NAME: "keycloak",
+      KEYCLOAK_DB_MANAGE: "1",
+      UBUNTUCARE_PUBLIC_APP_URL: PUBLIC_APP_URL,
+
+      // Demo data is never seeded in production. Set
+      // UBUNTUCARE_PURGE_DEMO_DATA=1 for a single deploy to delete rows that
+      // were seeded before this file existed, then set it back to 0.
+      UBUNTUCARE_SEED_DEMO_DATA: "0",
+      UBUNTUCARE_SEED_DEMO_USERS: "0",
+      UBUNTUCARE_PURGE_DEMO_DATA: "0",
 
       MINIO_ENDPOINT: "minio.railway.internal:9000",
       MINIO_ACCESS_KEY: "ubuntucare",
-      MINIO_SECRET_KEY: DEMO.minioRootPassword,
+      MINIO_SECRET_KEY: preserve(),
       MINIO_BUCKET: "ubuntucare",
 
       ENV_FILE: "/tmp/railway.env",

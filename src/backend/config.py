@@ -1,4 +1,13 @@
+import os
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
+
+_PLACEHOLDER_SECRETS = {
+    "change-me-in-production",
+    "change-me-in-production!!-32chars!",
+    "ubuntucare-railway-demo-app-secret-replace-before-production-0001",
+}
 
 
 class Settings(BaseSettings):
@@ -57,6 +66,18 @@ class Settings(BaseSettings):
         # The deployment .env is shared with docker-compose and therefore
         # contains infrastructure keys that are not part of this service.
         extra = "ignore"
+
+    @model_validator(mode="after")
+    def validate_production_settings(self) -> "Settings":
+        if os.environ.get("ENVIRONMENT", "").lower() != "production":
+            return self
+        if self.secret_key in _PLACEHOLDER_SECRETS:
+            raise ValueError("SECRET_KEY must be a unique secret in production")
+        if self.debug:
+            raise ValueError("DEBUG must be disabled in production")
+        if not self.cors_origins or "*" in [o.strip() for o in self.cors_origins.split(",")]:
+            raise ValueError("CORS_ORIGINS must list explicit origins in production")
+        return self
 
 
 settings = Settings()

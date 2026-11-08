@@ -15,6 +15,7 @@ Create Date: 2026-07-04
 
 from typing import Optional, Sequence
 from uuid import uuid4
+import os
 
 from alembic import op
 from sqlalchemy import text
@@ -23,6 +24,38 @@ revision: str = "006"
 down_revision: Optional[str] = "005"
 branch_labels: Optional[Sequence[str]] = None
 depends_on: Optional[Sequence[str]] = None
+
+
+def _demo_seed_enabled() -> bool:
+    explicit = os.getenv("UBUNTUCARE_SEED_DEMO_DATA")
+    if explicit is not None:
+        return explicit.strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("ENVIRONMENT", "production").strip().lower() != "production"
+
+
+def _ensure_appointments_table(conn) -> None:
+    """Create the appointments table before any demo-only seed data."""
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS appointments (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            patient_id UUID NOT NULL,
+            patient_name VARCHAR(200),
+            patient_phone VARCHAR(20),
+            provider_id UUID,
+            provider_name VARCHAR(200),
+            department VARCHAR(100),
+            appointment_type VARCHAR(50),
+            appointment_date DATE NOT NULL,
+            start_time TIME NOT NULL,
+            end_time TIME NOT NULL,
+            duration_minutes INTEGER DEFAULT 30,
+            status VARCHAR(50) DEFAULT 'scheduled',
+            reason TEXT,
+            facility_id VARCHAR(50),
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        )
+    """))
 
 # Patient UUIDs (must match 005)
 P = {
@@ -78,6 +111,13 @@ LO = {
 
 def upgrade() -> None:
     conn = op.get_bind()
+
+    # Schema required by later migrations must exist even when demo data is
+    # disabled. Only the seed data below is demo-only.
+    _ensure_appointments_table(conn)
+    if not _demo_seed_enabled():
+        print("Skipping enhanced demo data (UBUNTUCARE_SEED_DEMO_DATA is disabled).")
+        return
 
     # Resolve foreign keys
     uth_id = conn.execute(text("SELECT id FROM health_facilities WHERE code = 'UH001'")).scalar()

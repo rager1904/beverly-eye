@@ -11,6 +11,7 @@ Patients reference existing facilities (UH001, KNW001, NDH001) and users
 
 from typing import Optional, Sequence
 from uuid import uuid4
+import os
 
 from alembic import op
 from sqlalchemy import text
@@ -19,6 +20,13 @@ revision: str = "005"
 down_revision: Optional[str] = "004"
 branch_labels: Optional[Sequence[str]] = None
 depends_on: Optional[Sequence[str]] = None
+
+
+def _demo_seed_enabled() -> bool:
+    explicit = os.getenv("UBUNTUCARE_SEED_DEMO_DATA")
+    if explicit is not None:
+        return explicit.strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("ENVIRONMENT", "production").strip().lower() != "production"
 
 # Pre-generated UUIDs for demo patients (fixed so data is consistent across runs)
 P = {  # patient UUIDs
@@ -82,6 +90,9 @@ def _get_lab_kasonde_id() -> str:
 
 
 def upgrade() -> None:
+    if not _demo_seed_enabled():
+        print("Skipping demo patient data (UBUNTUCARE_SEED_DEMO_DATA is disabled).")
+        return
     conn = op.get_bind()
 
     # Resolve foreign key IDs

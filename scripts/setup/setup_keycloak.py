@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 _script = Path(__file__).resolve()
@@ -40,9 +40,31 @@ ADMIN_USER = os.getenv("KEYCLOAK_ADMIN_USER", "admin")
 ADMIN_PASSWORD = os.getenv("KEYCLOAK_ADMIN_PASSWORD", "admin123")
 API_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "api-gateway")
 FRONTEND_CLIENT_ID = os.getenv("KEYCLOAK_FRONTEND_CLIENT_ID", "frontend")
-API_CLIENT_SECRET = os.getenv("KEYCLOAK_CLIENT_SECRET", "dev-api-gateway-secret-change-me")
-DEV_USER_PASSWORD = os.getenv("KEYCLOAK_DEMO_USER_PASSWORD", "UbuntuCare2024!")
+API_CLIENT_SECRET = os.getenv("KEYCLOAK_CLIENT_SECRET", "")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production").strip().lower()
+PUBLIC_APP_URL = os.getenv("UBUNTUCARE_PUBLIC_APP_URL", "").strip().rstrip("/")
+KEYCLOAK_PUBLIC_URL = os.getenv("KEYCLOAK_PUBLIC_URL", "").strip().rstrip("/")
+BOOTSTRAP_ADMIN_EMAIL = os.getenv("KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL", "").strip()
+BOOTSTRAP_ADMIN_PASSWORD = os.getenv("KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD", "")
+BOOTSTRAP_ADMIN_NAME = os.getenv("KEYCLOAK_BOOTSTRAP_ADMIN_NAME", "System Administrator").strip()
+DEMO_USER_PASSWORD = os.getenv("KEYCLOAK_DEMO_USER_PASSWORD", "")
 DEFAULT_HOSPITAL_ID = "00000000-0000-4000-8000-000000000001"
+
+def validate_configuration() -> None:
+    # Called from main() so importing this module for tests stays side-effect
+    # free. The backend always calls main() as a subprocess.
+    if ENVIRONMENT == "production" and ADMIN_PASSWORD == "admin123":
+        raise SystemExit("KEYCLOAK_ADMIN_PASSWORD must be set in production.")
+    if ENVIRONMENT == "production" and not API_CLIENT_SECRET:
+        raise SystemExit("KEYCLOAK_CLIENT_SECRET must be set in production.")
+
+
+def demo_users_enabled() -> bool:
+    explicit = os.getenv("UBUNTUCARE_SEED_DEMO_USERS")
+    if explicit is not None:
+        return explicit.strip().lower() in {"1", "true", "yes", "on"}
+    return ENVIRONMENT != "production"
+
 
 REALM_ROLES = [
     "admin",
@@ -56,14 +78,14 @@ REALM_ROLES = [
     "ministry_official",
 ]
 
-DEV_USERS = [
-    # â”€â”€ Super Admin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+DEMO_USERS = [
+    # ── Super Admin ────────────────────────────────────────────────────────
     {
         "username": "admin",
         "email": "admin@ubuntucare.gov.zm",
         "firstName": "System",
         "lastName": "Admin",
-        "password": DEV_USER_PASSWORD,
+        "password": DEMO_USER_PASSWORD,
         "roles": ["admin"],
     },
     # â”€â”€ Hospital Admin (UTH) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -72,7 +94,7 @@ DEV_USERS = [
         "email": "uth.admin@uh.gov.zm",
         "firstName": "UTH",
         "lastName": "Administrator",
-        "password": DEV_USER_PASSWORD,
+        "password": DEMO_USER_PASSWORD,
         "roles": ["admin"],
     },
     # â”€â”€ Ministry of Health â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -81,7 +103,7 @@ DEV_USERS = [
         "email": "reports@moh.gov.zm",
         "firstName": "MoH",
         "lastName": "Reports",
-        "password": DEV_USER_PASSWORD,
+        "password": DEMO_USER_PASSWORD,
         "roles": ["ministry_official"],
     },
     # â”€â”€ Senior Medical Officer (UTH) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -90,7 +112,7 @@ DEV_USERS = [
         "email": "john.mwamba@uh.gov.zm",
         "firstName": "John",
         "lastName": "Mwamba",
-        "password": DEV_USER_PASSWORD,
+        "password": DEMO_USER_PASSWORD,
         "roles": ["doctor"],
     },
     # â”€â”€ Registered Nurse Midwife (UTH) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -99,7 +121,7 @@ DEV_USERS = [
         "email": "grace.banda@uh.gov.zm",
         "firstName": "Grace",
         "lastName": "Banda",
-        "password": DEV_USER_PASSWORD,
+        "password": DEMO_USER_PASSWORD,
         "roles": ["nurse", "community_health_worker"],
     },
     # â”€â”€ Community Health Worker (Kanyama) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -108,7 +130,7 @@ DEV_USERS = [
         "email": "peter.mulenga@chw.gov.zm",
         "firstName": "Peter",
         "lastName": "Mulenga",
-        "password": DEV_USER_PASSWORD,
+        "password": DEMO_USER_PASSWORD,
         "roles": ["community_health_worker"],
     },
     # â”€â”€ Pharmacist (Ndola) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -117,7 +139,7 @@ DEV_USERS = [
         "email": "alice.tembo@ndh.gov.zm",
         "firstName": "Alice",
         "lastName": "Tembo",
-        "password": DEV_USER_PASSWORD,
+        "password": DEMO_USER_PASSWORD,
         "roles": ["pharmacist"],
     },
     # â”€â”€ Chief Lab Scientist (UTH) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -126,7 +148,7 @@ DEV_USERS = [
         "email": "brian.kasonde@uh.gov.zm",
         "firstName": "Brian",
         "lastName": "Kasonde",
-        "password": DEV_USER_PASSWORD,
+        "password": DEMO_USER_PASSWORD,
         "roles": ["lab_technician"],
     },
     # â”€â”€ Patient (demo) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -135,7 +157,7 @@ DEV_USERS = [
         "email": "patient@ubuntucare.gov.zm",
         "firstName": "Grace",
         "lastName": "Banda",
-        "password": DEV_USER_PASSWORD,
+        "password": DEMO_USER_PASSWORD,
         "roles": ["patient"],
     },
 ]
@@ -243,10 +265,17 @@ def create_realm(token: str) -> None:
         "resetPasswordAllowed": True,
         "verifyEmail": False,
         "sslRequired": "external",
-        "passwordPolicy": "length(8) and digits(1) and lowerCase(1) and upperCase(1) and specialChars(1)",
+        "passwordPolicy": (
+            "length(12) and digits(1) and lowerCase(1) and upperCase(1) "
+            "and specialChars(1) and notUsername(1)"
+        ),
         "accessTokenLifespan": 300,
         "ssoSessionIdleTimeout": 1800,
         "ssoSessionMaxLifespan": 28800,
+        "bruteForceProtected": True,
+        "permanentLockout": False,
+        "maxFailureWaitSeconds": 900,
+        "failureFactor": 10,
     }
     status, body = http_request(
         "POST",
@@ -259,6 +288,67 @@ def create_realm(token: str) -> None:
             f"Failed to create realm '{REALM}' ({status}): {body.decode(errors='replace')[:500]}"
         )
     print(f"Realm '{REALM}' ready")
+
+
+def ensure_realm_settings(token: str) -> None:
+    """Apply production security settings to an existing realm."""
+    status, body = http_request(
+        "GET",
+        f"{SERVER_URL}/admin/realms/{REALM}",
+        headers=admin_headers(token),
+    )
+    if status != 200:
+        raise KeycloakSetupError(
+            f"Failed to read realm '{REALM}' ({status}): {body.decode(errors='replace')[:300]}"
+        )
+    realm = json.loads(body)
+    realm.update(
+        {
+            "registrationAllowed": False,
+            "loginWithEmailAllowed": True,
+            "duplicateEmailsAllowed": False,
+            "resetPasswordAllowed": True,
+            "verifyEmail": False,
+            "sslRequired": "external",
+            "passwordPolicy": (
+                "length(12) and digits(1) and lowerCase(1) and upperCase(1) "
+                "and specialChars(1) and notUsername(1)"
+            ),
+            "bruteForceProtected": True,
+            "permanentLockout": False,
+            "maxFailureWaitSeconds": 900,
+            "failureFactor": 10,
+        }
+    )
+    status, body = http_request(
+        "PUT",
+        f"{SERVER_URL}/admin/realms/{REALM}",
+        data=realm,
+        headers=admin_headers(token),
+    )
+    if status != 204:
+        raise KeycloakSetupError(
+            f"Failed to update realm settings ({status}): {body.decode(errors='replace')[:300]}"
+        )
+    print(f"Realm '{REALM}' security settings applied")
+
+
+def frontend_redirect_uris() -> list[str]:
+    uris: list[str] = []
+    if PUBLIC_APP_URL:
+        uris.extend([f"{PUBLIC_APP_URL}/*", f"{PUBLIC_APP_URL}/auth/callback"])
+    if ENVIRONMENT != "production":
+        uris.extend(["http://localhost:3000/*", "http://127.0.0.1:3000/*"])
+    return uris
+
+
+def frontend_web_origins() -> list[str]:
+    origins: list[str] = []
+    if PUBLIC_APP_URL:
+        origins.append(PUBLIC_APP_URL)
+    if ENVIRONMENT != "production":
+        origins.extend(["http://localhost:3000", "http://127.0.0.1:3000"])
+    return origins
 
 
 def ensure_roles(token: str) -> None:
@@ -384,11 +474,8 @@ def create_api_gateway_client(token: str) -> str:
             "serviceAccountsEnabled": True,
             "directAccessGrantsEnabled": True,
             "standardFlowEnabled": True,
-            "redirectUris": [
-                "http://localhost:8000/*",
-                "http://localhost:3000/*",
-            ],
-            "webOrigins": ["http://localhost:3000", "http://localhost:8000", "+"],
+            "redirectUris": frontend_redirect_uris(),
+            "webOrigins": frontend_web_origins() + ["+"],
             "fullScopeAllowed": True,
         }
         status, body = http_request(
@@ -428,6 +515,7 @@ def create_api_gateway_client(token: str) -> str:
 def create_frontend_client(token: str) -> None:
     existing = find_client(token, FRONTEND_CLIENT_ID)
     if existing:
+        ensure_frontend_client_settings(token, existing["id"])
         ensure_hospital_id_mapper(token, existing["id"])
         print(f"Client '{FRONTEND_CLIENT_ID}' already exists")
         return
@@ -440,14 +528,11 @@ def create_frontend_client(token: str) -> None:
         "publicClient": True,
         "standardFlowEnabled": True,
         "directAccessGrantsEnabled": True,
-        "redirectUris": [
-            "http://localhost:3000/*",
-            "http://127.0.0.1:3000/*",
-        ],
-        "webOrigins": ["http://localhost:3000", "http://127.0.0.1:3000", "+"],
+        "redirectUris": frontend_redirect_uris(),
+        "webOrigins": frontend_web_origins() + ["+"],
         "fullScopeAllowed": True,
         "attributes": {
-            "post.logout.redirect.uris": "http://localhost:3000/*",
+            "post.logout.redirect.uris": " ".join(frontend_redirect_uris()),
         },
     }
     status, body = http_request(
@@ -467,6 +552,36 @@ def create_frontend_client(token: str) -> None:
         )
     ensure_hospital_id_mapper(token, created["id"])
     print(f"Created public client '{FRONTEND_CLIENT_ID}'")
+
+
+def ensure_frontend_client_settings(token: str, client_uuid: str) -> None:
+    """Keep redirect URIs in sync with the deployed frontend origin."""
+    status, body = http_request(
+        "GET",
+        f"{SERVER_URL}/admin/realms/{REALM}/clients/{client_uuid}",
+        headers=admin_headers(token),
+    )
+    if status != 200:
+        raise KeycloakSetupError(
+            f"Failed to fetch client '{FRONTEND_CLIENT_ID}' ({status}): {body.decode(errors='replace')[:300]}"
+        )
+    client = json.loads(body)
+    client["redirectUris"] = frontend_redirect_uris()
+    client["webOrigins"] = frontend_web_origins() + ["+"]
+    attributes = client.get("attributes") or {}
+    attributes["post.logout.redirect.uris"] = " ".join(frontend_redirect_uris())
+    client["attributes"] = attributes
+    status, body = http_request(
+        "PUT",
+        f"{SERVER_URL}/admin/realms/{REALM}/clients/{client_uuid}",
+        data=client,
+        headers=admin_headers(token),
+    )
+    if status != 204:
+        raise KeycloakSetupError(
+            f"Failed to update client '{FRONTEND_CLIENT_ID}' ({status}): {body.decode(errors='replace')[:300]}"
+        )
+    print(f"Updated redirect URIs for '{FRONTEND_CLIENT_ID}'")
 
 
 def ensure_service_account_roles(token: str, client_uuid: str) -> None:
@@ -530,12 +645,26 @@ def ensure_service_account_roles(token: str, client_uuid: str) -> None:
 def find_user(token: str, username: str) -> dict | None:
     status, body = http_request(
         "GET",
-        f"{SERVER_URL}/admin/realms/{REALM}/users?username={username}",
+        f"{SERVER_URL}/admin/realms/{REALM}/users?username={quote(username)}&exact=true",
         headers=admin_headers(token),
     )
     if status != 200:
         raise KeycloakSetupError(
             f"Failed to lookup user '{username}' ({status}): {body.decode(errors='replace')[:300]}"
+        )
+    users = json.loads(body)
+    return users[0] if users else None
+
+
+def find_user_by_email(token: str, email: str) -> dict | None:
+    status, body = http_request(
+        "GET",
+        f"{SERVER_URL}/admin/realms/{REALM}/users?email={quote(email)}&exact=true",
+        headers=admin_headers(token),
+    )
+    if status != 200:
+        raise KeycloakSetupError(
+            f"Failed to lookup user by email ({status}): {body.decode(errors='replace')[:300]}"
         )
     users = json.loads(body)
     return users[0] if users else None
@@ -554,81 +683,144 @@ def get_role(token: str, role_name: str) -> dict:
     return json.loads(body)
 
 
-def ensure_dev_users(token: str) -> None:
-    for user in DEV_USERS:
-        existing = find_user(token, user["username"])
-        if existing:
-            user_id = existing["id"]
-            attributes = existing.get("attributes") or {}
-            attributes["hospital_id"] = [DEFAULT_HOSPITAL_ID]
-            existing["attributes"] = attributes
-            status, body = http_request(
-                "PUT",
-                f"{SERVER_URL}/admin/realms/{REALM}/users/{user_id}",
-                data=existing,
-                headers=admin_headers(token),
-            )
-            if status != 204:
-                raise KeycloakSetupError(
-                    f"Failed to set hospital for '{user['username']}' ({status}): {body.decode(errors='replace')[:300]}"
-                )
-            print(f"User '{user['username']}' already exists")
-        else:
-            payload = {
-                "username": user["username"],
-                "email": user["email"],
-                "firstName": user["firstName"],
-                "lastName": user["lastName"],
-                "enabled": True,
-                "emailVerified": True,
-                "attributes": {"hospital_id": [DEFAULT_HOSPITAL_ID]},
-            }
-            status, body = http_request(
-                "POST",
-                f"{SERVER_URL}/admin/realms/{REALM}/users",
-                data=payload,
-                headers=admin_headers(token),
-            )
-            if status != 201:
-                raise KeycloakSetupError(
-                    f"Failed to create user '{user['username']}' ({status}): {body.decode(errors='replace')[:500]}"
-                )
-            created = find_user(token, user["username"])
-            if not created:
-                raise KeycloakSetupError(f"Created user '{user['username']}' but could not look it up")
-            user_id = created["id"]
-            print(f"Created user '{user['username']}'")
-
-        password_payload = {
-            "type": "password",
-            "value": user["password"],
-            "temporary": False,
-        }
+def ensure_user(token: str, user: dict, *, temporary_password: bool = False) -> None:
+    """Create or update a single Keycloak user and its realm roles."""
+    username = user["username"]
+    existing = find_user(token, username)
+    if existing:
+        user_id = existing["id"]
+        attributes = existing.get("attributes") or {}
+        attributes["hospital_id"] = [DEFAULT_HOSPITAL_ID]
+        existing["attributes"] = attributes
         status, body = http_request(
             "PUT",
-            f"{SERVER_URL}/admin/realms/{REALM}/users/{user_id}/reset-password",
-            data=password_payload,
+            f"{SERVER_URL}/admin/realms/{REALM}/users/{user_id}",
+            data=existing,
             headers=admin_headers(token),
         )
         if status != 204:
             raise KeycloakSetupError(
-                f"Failed to set password for '{user['username']}' ({status}): {body.decode(errors='replace')[:300]}"
+                f"Failed to update user '{username}' ({status}): {body.decode(errors='replace')[:300]}"
             )
-
-        role_payload = [get_role(token, role_name) for role_name in user["roles"]]
+        print(f"User '{username}' already exists")
+    else:
+        payload = {
+            "username": username,
+            "email": user["email"],
+            "firstName": user["firstName"],
+            "lastName": user["lastName"],
+            "enabled": True,
+            "emailVerified": True,
+            "attributes": {"hospital_id": [DEFAULT_HOSPITAL_ID]},
+        }
         status, body = http_request(
             "POST",
-            f"{SERVER_URL}/admin/realms/{REALM}/users/{user_id}/role-mappings/realm",
-            data=role_payload,
+            f"{SERVER_URL}/admin/realms/{REALM}/users",
+            data=payload,
             headers=admin_headers(token),
         )
-        if status != 204:
+        if status != 201:
             raise KeycloakSetupError(
-                f"Failed to assign roles to '{user['username']}' ({status}): {body.decode(errors='replace')[:300]}"
+                f"Failed to create user '{username}' ({status}): {body.decode(errors='replace')[:500]}"
             )
+        created = find_user(token, username)
+        if not created:
+            raise KeycloakSetupError(f"Created user '{username}' but could not look it up")
+        user_id = created["id"]
+        print(f"Created user '{username}'")
+
+    password_payload = {
+        "type": "password",
+        "value": user["password"],
+        "temporary": temporary_password,
+    }
+    status, body = http_request(
+        "PUT",
+        f"{SERVER_URL}/admin/realms/{REALM}/users/{user_id}/reset-password",
+        data=password_payload,
+        headers=admin_headers(token),
+    )
+    if status != 204:
+        raise KeycloakSetupError(
+            f"Failed to set password for '{username}' ({status}): {body.decode(errors='replace')[:300]}"
+        )
+
+    role_payload = [get_role(token, role_name) for role_name in user["roles"]]
+    status, body = http_request(
+        "POST",
+        f"{SERVER_URL}/admin/realms/{REALM}/users/{user_id}/role-mappings/realm",
+        data=role_payload,
+        headers=admin_headers(token),
+    )
+    if status != 204:
+        raise KeycloakSetupError(
+            f"Failed to assign roles to '{username}' ({status}): {body.decode(errors='replace')[:300]}"
+        )
+
+
+def ensure_bootstrap_admin(token: str) -> None:
+    """Create the first real administrator from deployment variables.
+
+    The account is only created when both variables are supplied. It is never
+    overwritten on later starts, so a rotated password in Keycloak is kept.
+    """
+    if not BOOTSTRAP_ADMIN_EMAIL and not BOOTSTRAP_ADMIN_PASSWORD:
+        print("No bootstrap administrator configured")
+        return
+    if not BOOTSTRAP_ADMIN_EMAIL or not BOOTSTRAP_ADMIN_PASSWORD:
+        raise KeycloakSetupError(
+            "Set both KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL and KEYCLOAK_BOOTSTRAP_ADMIN_PASSWORD."
+        )
+    if find_user(token, BOOTSTRAP_ADMIN_EMAIL):
+        print("Bootstrap administrator already exists")
+        return
+
+    parts = BOOTSTRAP_ADMIN_NAME.split(None, 1)
+    user = {
+        "username": BOOTSTRAP_ADMIN_EMAIL,
+        "email": BOOTSTRAP_ADMIN_EMAIL,
+        "firstName": parts[0],
+        "lastName": parts[1] if len(parts) > 1 else parts[0],
+        "password": BOOTSTRAP_ADMIN_PASSWORD,
+        "roles": ["admin"],
+    }
+    ensure_user(token, user)
+    print(f"Created bootstrap administrator '{BOOTSTRAP_ADMIN_EMAIL}'")
+
+
+def ensure_demo_users(token: str) -> None:
+    if not DEMO_USER_PASSWORD:
+        raise KeycloakSetupError(
+            "UBUNTUCARE_SEED_DEMO_USERS is enabled but KEYCLOAK_DEMO_USER_PASSWORD is not set."
+        )
+    for user in DEMO_USERS:
+        ensure_user(token, user)
+    print(f"Seeded {len(DEMO_USERS)} demo users (development only)")
+
+
+def purge_demo_users(token: str) -> None:
+    """Delete the demo accounts from an existing realm, if present."""
+    removed = 0
+    for user in DEMO_USERS:
+        existing = find_user(token, user["username"])
+        if not existing:
+            continue
+        status, body = http_request(
+            "DELETE",
+            f"{SERVER_URL}/admin/realms/{REALM}/users/{existing['id']}",
+            headers=admin_headers(token),
+        )
+        if status not in (204, 404):
+            raise KeycloakSetupError(
+                f"Failed to delete demo user '{user['username']}' ({status}): {body.decode(errors='replace')[:300]}"
+            )
+        removed += 1
+    print(f"Removed {removed} demo users from Keycloak")
 
 
 def update_env_file(client_secret: str) -> None:
+    if ENVIRONMENT == "production":
+        return
     if not ENV_FILE.exists():
         print(f"Skipping .env update ({ENV_FILE} not found)")
         return
@@ -654,6 +846,7 @@ def update_env_file(client_secret: str) -> None:
 
 def main() -> int:
     print("Setting up Keycloak for UbuntuCare...")
+    validate_configuration()
     wait_for_keycloak()
     token = get_admin_token()
 
@@ -661,11 +854,52 @@ def main() -> int:
         create_realm(token)
     else:
         print(f"Realm '{REALM}' already exists")
+        ensure_realm_settings(token)
 
     ensure_roles(token)
     client_secret = create_api_gateway_client(token)
     create_frontend_client(token)
-    ensure_dev_users(token)
+
+    purge_requested = os.getenv("UBUNTUCARE_PURGE_DEMO_USERS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if purge_requested:
+        if not BOOTSTRAP_ADMIN_EMAIL:
+            raise SystemExit(
+                "KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL must be set before purging demo users."
+            )
+        demo_emails = {user["email"].lower() for user in DEMO_USERS}
+        if BOOTSTRAP_ADMIN_EMAIL.lower() in demo_emails:
+            raise SystemExit(
+                "KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL must not reuse a demo account email."
+            )
+
+    # Create the real administrator before removing the demo accounts so the
+    # realm is never left without an admin. In production a bootstrap admin is
+    # mandatory, but its password may be removed after the account exists.
+    demo_enabled = demo_users_enabled()
+    if demo_enabled:
+        ensure_bootstrap_admin(token)
+    else:
+        if not BOOTSTRAP_ADMIN_EMAIL:
+            raise SystemExit(
+                "KEYCLOAK_BOOTSTRAP_ADMIN_EMAIL must be set when demo users are disabled."
+            )
+        if find_user(token, BOOTSTRAP_ADMIN_EMAIL):
+            print("Bootstrap administrator already exists")
+        else:
+            ensure_bootstrap_admin(token)
+
+    if purge_requested:
+        purge_demo_users(token)
+    if demo_enabled:
+        ensure_demo_users(token)
+    else:
+        print("Demo user provisioning is disabled")
+
     update_env_file(client_secret)
 
     print("\nKeycloak setup complete.")
@@ -674,11 +908,10 @@ def main() -> int:
     print(f"  Frontend client:    {FRONTEND_CLIENT_ID}")
     print(f"  Admin console:      {SERVER_URL}/admin")
     print(f"  OpenID config:      {SERVER_URL}/realms/{REALM}/.well-known/openid-configuration")
-    print("\nDev users:")
-    for user in DEV_USERS:
-        print(f"  - {user['username']} / {user['password']} ({', '.join(user['roles'])})")
-    if ENV_FILE.exists():
-        print(f"\nKEYCLOAK_CLIENT_SECRET was written to {ENV_FILE}")
+    if demo_users_enabled():
+        print("  Demo users:         enabled (development only)")
+    else:
+        print("  Demo users:         disabled")
     return 0
 
 

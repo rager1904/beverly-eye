@@ -1,8 +1,9 @@
 {
   "scripts": {
     "railway:validate": "tsc --noEmit",
-    "railway:plan": "railway config plan",
-    "railway:apply": "railway config apply",
+    "railway:plan": "railway config plan --file .railway/railway.dependencies.ts",
+    "railway:apply": "railway config apply --file .railway/railway.dependencies.ts",
+    "railway:plan:full": "railway config plan --file .railway/railway.ts",
     "railway:domain": "railway domain --service frontend --port 3000"
   },
   "devDependencies": {

@@ -4,8 +4,16 @@ import os
 from pathlib import Path
 from typing import Annotated, Dict, List, Optional, Set
 
-from pydantic import field_validator, Field
+from pydantic import field_validator, model_validator, Field
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+# Values that were committed to the repository at some point. They must never
+# be accepted by a production process.
+_PLACEHOLDER_SECRETS = {
+    "change-me-in-production",
+    "change-me-in-production!!-32chars!",
+    "ubuntucare-railway-demo-app-secret-replace-before-production-0001",
+}
 
 
 class Settings(BaseSettings):
@@ -338,9 +346,26 @@ class Settings(BaseSettings):
     @field_validator("SECRET_KEY")
     @classmethod
     def validate_secret_key(cls, v: str) -> str:
-        if v == "change-me-in-production" and os.environ.get("ENVIRONMENT") == "production":
-            raise ValueError("SECRET_KEY must be changed in production")
+        if v in _PLACEHOLDER_SECRETS and os.environ.get("ENVIRONMENT", "").lower() == "production":
+            raise ValueError("SECRET_KEY must be a unique secret in production")
         return v
+
+    @model_validator(mode="after")
+    def validate_production_settings(self) -> "Settings":
+        if self.ENVIRONMENT != "production":
+            return self
+        # A bare import (tests, tooling) must not fail just because the model
+        # defaults to production. Enforce the rules when the deployment
+        # actually supplies the production configuration.
+        if not {"ENVIRONMENT", "SECRET_KEY"} & set(self.model_fields_set):
+            return self
+        if self.DEBUG:
+            raise ValueError("DEBUG must be disabled in production")
+        if self.SECRET_KEY in _PLACEHOLDER_SECRETS:
+            raise ValueError("SECRET_KEY must not be a repository placeholder in production")
+        if not self.CORS_ORIGINS or "*" in self.CORS_ORIGINS:
+            raise ValueError("CORS_ORIGINS must list explicit origins in production")
+        return self
 
     @field_validator("JWT_PUBLIC_KEY", mode="before")
     @classmethod

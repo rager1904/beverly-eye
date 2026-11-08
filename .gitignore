@@ -240,3 +240,6 @@ wandb/
 # Frontend source libraries are application code, not Python build output.
 !src/frontend/web/src/lib/
 !src/frontend/web/src/lib/**
+
+# Railway CLI plan output can contain variable values
+.railway/*.plan

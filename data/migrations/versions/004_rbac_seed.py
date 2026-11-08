@@ -7,6 +7,7 @@ Create Date: 2026-06-17
 
 from typing import Optional, Sequence
 from uuid import uuid4
+import os
 
 from alembic import op
 from sqlalchemy import text
@@ -17,11 +18,20 @@ branch_labels: Optional[Sequence[str]] = None
 depends_on: Optional[Sequence[str]] = None
 
 
+def _demo_seed_enabled() -> bool:
+    """Demo accounts are opt-in in production and opt-out in development."""
+    explicit = os.getenv("UBUNTUCARE_SEED_DEMO_DATA")
+    if explicit is not None:
+        return explicit.strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("ENVIRONMENT", "production").strip().lower() != "production"
+
+
 def upgrade() -> None:
     _seed_permissions()
     _seed_roles()
     _seed_role_permissions()
-    _seed_default_users()
+    if _demo_seed_enabled():
+        _seed_default_users()
 
 
 def downgrade() -> None:

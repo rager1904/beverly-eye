@@ -64,24 +64,19 @@ async def check_database_health() -> dict:
 
 
 async def check_redis_health() -> dict:
+    client = None
     try:
-        import asyncio
-        from urllib.parse import urlparse
-        endpoint = urlparse(settings.redis_url)
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(endpoint.hostname or "redis",
-                                    endpoint.port or 6379), timeout=2
-        )
-        writer.write(b"PING\r\n")
-        await writer.drain()
-        data = await asyncio.wait_for(reader.read(1024), timeout=2)
-        writer.close()
-        await writer.wait_closed()
-        if data.startswith(b"+PONG"):
+        from redis.asyncio import Redis
+
+        client = Redis.from_url(settings.redis_url, socket_connect_timeout=2, socket_timeout=2)
+        if await client.ping():
             return {"status": "healthy"}
-        return {"status": "unhealthy", "error": f"unexpected response: {data!r}"}
+        return {"status": "unhealthy", "error": "Redis PING did not return PONG"}
     except Exception as e:
         return {"status": "unhealthy", "error": str(e)}
+    finally:
+        if client is not None:
+            await client.aclose()
 
 
 async def check_service_health(service: str) -> dict:

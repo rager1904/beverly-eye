@@ -1,0 +1,42 @@
+# =============================================================================
+# UbuntuCare - Railway backend
+#
+# One container runs the eleven core FastAPI services, the API gateway, and
+# the Celery worker/beat (the same topology as the Colab demo). AI packages,
+# Ollama, Qdrant, and Neo4j are intentionally absent.
+# =============================================================================
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app
+
+WORKDIR /app
+
+# curl is used by operators for in-container diagnostics.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Core-only dependency set from the Colab launcher. No AI/torch packages.
+COPY scripts/colab/requirements.txt /tmp/ubuntucare-requirements.txt
+RUN python -m pip install --upgrade pip \
+    && python -m pip install -r /tmp/ubuntucare-requirements.txt supervisor
+
+# The backend only needs the backend sources, migrations, and the Railway
+# startup/setup scripts. Keeping the frontend out of this image saves space.
+COPY src/backend ./src/backend
+COPY scripts/migration ./scripts/migration
+COPY scripts/setup ./scripts/setup
+COPY scripts/railway ./scripts/railway
+COPY data/migrations ./data/migrations
+COPY deploy/railway/supervisord.conf ./deploy/railway/supervisord.conf
+
+RUN mkdir -p /app/data/uploads /app/data/offline /app/data/langgraph /app/data/objects
+
+EXPOSE 8000
+
+# The entrypoint waits for dependencies, runs migrations, provisions Keycloak
+# and MinIO, then hands off to supervisord.
+CMD ["python", "scripts/railway/start_backend.py"]

@@ -170,7 +170,9 @@ def http_request(
         return exc.code, exc.read()
 
 
-def wait_for_keycloak(timeout_seconds: int = 120) -> None:
+def wait_for_keycloak(timeout_seconds: int | None = None) -> None:
+    if timeout_seconds is None:
+        timeout_seconds = int(os.getenv("KEYCLOAK_WAIT_TIMEOUT", "120"))
     deadline = time.time() + timeout_seconds
     health_url = f"{SERVER_URL}/health/ready"
     while time.time() < deadline:

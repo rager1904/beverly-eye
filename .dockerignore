@@ -25,6 +25,12 @@ docs/
 scripts/*
 !scripts/migration/
 !scripts/migration/**
+!scripts/railway/
+!scripts/railway/**
+!scripts/setup/
+!scripts/setup/**
+!scripts/colab/
+!scripts/colab/requirements.txt
 .github/
 zambia_deployment/
 tests/

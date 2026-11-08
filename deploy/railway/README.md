@@ -172,7 +172,7 @@ approval.
 | `GET https://<frontend>/login` | 200 |
 | `GET http://backend.railway.internal:8000/health` | 200 |
 | `GET http://backend.railway.internal:8000/ready` | 200 |
-| Keycloak `/realms/master/.well-known/openid-configuration` | 200 |
+| Keycloak `http://keycloak.railway.internal:8080/health/ready` | 200 |
 | MinIO `/minio/health/live` | 200 |
 
 Configure Railway health checks from the IaC and alert on failed deploys.
@@ -215,7 +215,7 @@ railway variables --service backend --kv
 - [ ] `SELECT count(*) FROM users WHERE username IN (...demo list...)` returns
       `0`.
 - [ ] Backend `/health` reports healthy and `/ready` returns 200.
-- [ ] Keycloak's master-realm discovery endpoint returns 200 and survives a restart.
+- [ ] Keycloak `/health/ready` on port 8080 returns 200 and survives a restart.
 - [ ] MinIO health endpoint returns 200 and the `ubuntucare` bucket exists.
 - [ ] `UBUNTUCARE_PURGE_DEMO_DATA` and `UBUNTUCARE_PURGE_DEMO_USERS` are `0`
       after the cutover.

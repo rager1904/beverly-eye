@@ -139,12 +139,60 @@ function Set-RailwayVariable {
         Write-Host ("  [plan] {0,-12} {1}" -f $Service, $Key)
         return
     }
-    # Secrets go through stdin so they never appear in the process list.
-    $Value | & $railway @common $Key --stdin | Out-Null
-    if ($LASTEXITCODE -ne 0) {
-        throw "Failed to set $Key on $Service (exit code $LASTEXITCODE)"
+    # Secrets go through stdin so they never appear in the process list. Retry
+    # transient Railway API connection failures without logging CLI output.
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $null = $Value | & $railway @common $Key --stdin 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host ("  [set]  {0,-12} {1}" -f $Service, $Key)
+            return
+        }
+        if ($attempt -lt 3) {
+            Write-Warning "Railway did not accept $Key on $Service (attempt $attempt); retrying."
+            Start-Sleep -Seconds (3 * $attempt)
+        }
     }
-    Write-Host ("  [set]  {0,-12} {1}" -f $Service, $Key)
+    throw "Failed to set $Key on $Service after 3 attempts."
+}
+
+function Set-RailwayVariables {
+    param(
+        [string]$Service,
+        [System.Collections.IDictionary]$Values
+    )
+    foreach ($key in $Values.Keys) {
+        if (-not $Apply) {
+            Write-Host ("  [plan] {0,-12} {1}" -f $Service, $key)
+        }
+    }
+    if (-not $Apply) { return }
+
+    $arguments = @(
+        "variable", "set",
+        "--service", $Service,
+        "--environment", $EnvironmentName,
+        "--project", $ProjectId,
+        "--skip-deploys",
+        "--json"
+    )
+    foreach ($entry in $Values.GetEnumerator()) {
+        $arguments += "{0}={1}" -f $entry.Key, $entry.Value
+    }
+
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        $null = & $railway @arguments 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            foreach ($key in $Values.Keys) {
+                Write-Host ("  [set]  {0,-12} {1}" -f $Service, $key)
+            }
+            return
+        }
+        if ($attempt -lt 3) {
+            Write-Warning "Railway did not accept variables on $Service (attempt $attempt); retrying."
+            Start-Sleep -Seconds (3 * $attempt)
+        }
+    }
+    throw "Failed to set variables on $Service after 3 attempts."
 }
 
 function Get-RailwayVariableNames {
@@ -233,9 +281,7 @@ if (-not $SkipBootstrapAdmin -and -not [string]::IsNullOrWhiteSpace($BootstrapAd
 }
 
 Write-Host "Backend (non-secret)" -ForegroundColor Yellow
-foreach ($entry in $backendPlain.GetEnumerator()) {
-    Set-RailwayVariable -Service "backend" -Key $entry.Key -Value $entry.Value
-}
+Set-RailwayVariables -Service "backend" -Values $backendPlain
 
 # ---------------------------------------------------------------------------
 # Secrets

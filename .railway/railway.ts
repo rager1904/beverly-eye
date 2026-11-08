@@ -97,13 +97,15 @@ export default defineRailway(() => {
   const keycloak = service("keycloak", {
     source: image("quay.io/keycloak/keycloak:23.0.7"),
     start: "/opt/keycloak/bin/kc.sh start --http-port=8080 --hostname-strict=false",
-    healthcheck: "/realms/master/.well-known/openid-configuration",
+    healthcheck: "/health/ready",
     healthcheckTimeout: 600,
     env: {
+      // This Keycloak 23 image exposes /health/ready on its HTTP port.
       PORT: "8080",
       KEYCLOAK_ADMIN: "admin",
       KEYCLOAK_ADMIN_PASSWORD: preserve(),
       KC_HTTP_ENABLED: "true",
+      KC_HTTP_MANAGEMENT_PORT: "9000",
       KC_HOSTNAME_STRICT: "false",
       KC_HEALTH_ENABLED: "true",
       KC_METRICS_ENABLED: "true",

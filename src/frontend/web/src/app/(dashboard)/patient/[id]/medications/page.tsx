@@ -62,7 +62,7 @@ export default function PatientMedicationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" asChild>
@@ -97,7 +97,7 @@ export default function PatientMedicationsPage() {
                     <Badge variant="outline" className={statusColor(med.status)}>{med.status}</Badge>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4 mt-2 text-sm">
+                <div className="grid gap-2 mt-2 text-sm sm:grid-cols-3 sm:gap-4">
                   {med.dosage && <div><span className="text-muted-foreground">Dosage:</span> {med.dosage} {med.dosage_unit || ''}</div>}
                   {med.frequency && <div><span className="text-muted-foreground">Frequency:</span> {med.frequency}</div>}
                   {med.route && <div><span className="text-muted-foreground">Route:</span> {med.route}</div>}

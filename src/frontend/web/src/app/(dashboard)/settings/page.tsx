@@ -242,7 +242,7 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Theme</label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid gap-3 sm:grid-cols-3">
                   {[
                     { mode: 'light', label: 'Light', icon: '☀️' },
                     { mode: 'dark', label: 'Dark', icon: '🌙' },

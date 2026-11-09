@@ -122,7 +122,7 @@ export default function LandingPage() {
                 <HeartPulse className="h-4 w-4" />
                 WHO Digital Health Guidelines Compliant
               </div>
-              <h1 className="mt-6 max-w-4xl text-4xl font-bold tracking-tight md:text-6xl">
+              <h1 className="mt-6 max-w-4xl text-3xl font-bold tracking-tight sm:text-4xl md:text-6xl">
                 AI-Powered Healthcare Platform for Zambia and Africa
               </h1>
               <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-600">
@@ -147,7 +147,7 @@ export default function LandingPage() {
               <div className="rounded-lg border border-slate-200 bg-slate-950 p-3 shadow-2xl shadow-slate-200">
                 <img src="/images/hero.png" alt="UbuntuCare AI-powered healthcare network" className="aspect-[16/10] w-full rounded-md" />
               </div>
-              <div className="absolute -bottom-8 left-6 right-6 grid grid-cols-3 gap-3 rounded-lg border border-slate-200 bg-white p-4 shadow-xl">
+              <div className="relative mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3 lg:absolute lg:-bottom-8 lg:left-6 lg:right-6 lg:mt-0 rounded-lg border border-slate-200 bg-white p-4 shadow-xl">
                 {[['Clinical AI', 'SOAP notes'], ['Telemedicine', 'Remote care'], ['Analytics', 'Live insights']].map(([t, s]) => (
                   <div key={t}><p className="text-sm font-semibold">{t}</p><p className="text-xs text-slate-500">{s}</p></div>
                 ))}

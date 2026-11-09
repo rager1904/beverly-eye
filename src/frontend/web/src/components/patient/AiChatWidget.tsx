@@ -121,8 +121,8 @@ export function AiChatWidget({ open, onOpenChange }: AiChatWidgetProps) {
       )}
 
       {open && (
-        <div className="fixed bottom-6 right-6 z-50 w-[400px] max-w-[calc(100vw-2rem)]">
-          <Card className="shadow-2xl border-2">
+        <div className="fixed bottom-4 left-4 right-4 z-50 ml-auto max-w-[400px] sm:bottom-6 sm:left-auto sm:right-6 sm:w-[400px]">
+          <Card className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-2 shadow-2xl sm:max-h-[calc(100dvh-3rem)]">
             <CardHeader className="flex flex-row items-center justify-between p-4 bg-healthcare-green text-white rounded-t-lg">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Bot className="h-5 w-5" />
@@ -134,7 +134,7 @@ export function AiChatWidget({ open, onOpenChange }: AiChatWidgetProps) {
             </CardHeader>
 
             <CardContent className="p-0">
-              <div className="h-[400px] overflow-y-auto p-4 space-y-3">
+              <div className="h-[min(400px,45dvh)] overflow-y-auto p-4 space-y-3">
                 {messages.map((msg, i) => (
                   <div key={i} className={`flex gap-2 ${msg.role === 'user' ? 'justify-end' : ''}`}>
                     {msg.role === 'assistant' && (
@@ -142,7 +142,7 @@ export function AiChatWidget({ open, onOpenChange }: AiChatWidgetProps) {
                         <Bot className="h-4 w-4 text-healthcare-green" />
                       </div>
                     )}
-                    <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
+                    <div className={`min-w-0 max-w-[80%] break-words rounded-lg px-3 py-2 text-sm ${
                       msg.role === 'user' ? 'bg-healthcare-green text-white' : 'bg-muted'
                     }`}>
                       {msg.content}

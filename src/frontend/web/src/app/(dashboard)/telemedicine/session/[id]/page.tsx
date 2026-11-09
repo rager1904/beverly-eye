@@ -59,9 +59,9 @@ export default function TelemedicineSessionPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-2rem)] flex flex-col">
-      <div className="flex items-center justify-between p-4 bg-card border-b rounded-t-lg">
-        <div className="flex items-center gap-3">
+    <div className="flex min-w-0 flex-col lg:h-[calc(100dvh-8rem)] lg:min-h-96">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:p-4 bg-card border-b rounded-t-lg">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/telemedicine"><ArrowLeft className="h-4 w-4" /></Link>
           </Button>
@@ -90,8 +90,8 @@ export default function TelemedicineSessionPage() {
         </div>
       </div>
 
-      <div className="flex flex-1 gap-4 p-4 overflow-hidden">
-        <div className={`flex-1 bg-muted rounded-lg flex items-center justify-center ${!sessionActive ? 'opacity-50' : ''}`}>
+      <div className="flex min-h-0 flex-1 flex-col gap-4 p-2 sm:p-4 lg:flex-row">
+        <div className={`min-h-48 min-w-0 flex-1 bg-muted rounded-lg flex items-center justify-center ${!sessionActive ? 'opacity-50' : ''}`}>
           {sessionActive ? (
             <div className="text-center">
               <Video className="h-16 w-16 mx-auto mb-3 text-muted-foreground" />
@@ -107,14 +107,14 @@ export default function TelemedicineSessionPage() {
         </div>
 
         {showChat && (
-          <Card className="w-80 flex flex-col">
+          <Card className="flex min-h-0 w-full flex-col lg:w-80 lg:shrink-0">
             <CardHeader className="p-3 border-b">
               <CardTitle className="text-sm flex items-center gap-2"><MessageSquare className="h-4 w-4" />Chat</CardTitle>
             </CardHeader>
-            <CardContent className="flex-1 overflow-y-auto p-3 space-y-3">
+            <CardContent className="max-h-64 flex-1 overflow-y-auto lg:max-h-none p-3 space-y-3">
               {messages.map((msg) => (
                 <div key={msg.id} className={`flex ${msg.sender === 'provider' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] p-2 rounded-lg text-sm ${msg.sender === 'provider' ? 'bg-healthcare-blue text-white' : 'bg-muted'}`}>
+                  <div className={`max-w-[80%] break-words p-2 rounded-lg text-sm ${msg.sender === 'provider' ? 'bg-healthcare-blue text-white' : 'bg-muted'}`}>
                     <p>{msg.text}</p>
                     <p className="text-xs opacity-70 mt-1">{msg.timestamp.toLocaleTimeString()}</p>
                   </div>

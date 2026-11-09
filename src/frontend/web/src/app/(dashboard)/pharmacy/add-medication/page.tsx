@@ -70,7 +70,7 @@ export default function AddMedicationPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" asChild>
@@ -116,7 +116,7 @@ export default function AddMedicationPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid gap-4 sm:grid-cols-3">
               <div>
                 <label className="text-sm font-medium mb-1.5 block">Quantity *</label>
                 <Input type="number" min="0" placeholder="0" value={quantity} onChange={(e) => setQuantity(e.target.value)} required />

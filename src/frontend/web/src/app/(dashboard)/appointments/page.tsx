@@ -101,7 +101,7 @@ export default function AppointmentsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Calendar className="h-6 w-6 text-healthcare-blue" />

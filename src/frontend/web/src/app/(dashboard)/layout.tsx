@@ -73,9 +73,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen bg-background">
-      <aside className={`fixed inset-y-0 left-0 z-50 bg-card border-r transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-16'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
-        <div className="flex items-center justify-between h-16 px-4 border-b">
-          {sidebarOpen ? (
+      <aside className={`fixed inset-y-0 left-0 z-50 flex max-w-[calc(100%-2rem)] flex-col bg-card border-r transition-all duration-300 ${sidebarOpen ? 'w-64' : 'w-64 lg:w-16'} ${mobileOpen ? 'visible translate-x-0' : 'invisible -translate-x-full'} lg:visible lg:translate-x-0`}>
+        <div className="flex items-center justify-between h-16 shrink-0 px-4 border-b">
+          {(sidebarOpen || mobileOpen) ? (
             <Link href="/" className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full bg-healthcare-green flex items-center justify-center flex-shrink-0">
                 <Heart className="h-5 w-5 text-white" fill="white" />
@@ -90,27 +90,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="hidden lg:block p-1 rounded-md hover:bg-accent">
             {sidebarOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
+          <button type="button" aria-label="Close navigation" onClick={() => setMobileOpen(false)} className="rounded-md p-2 hover:bg-accent lg:hidden">
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
-        <nav className="p-2 space-y-1">
+        <nav id="dashboard-navigation" className="min-h-0 flex-1 space-y-1 overflow-y-auto p-2">
           {filteredLinks.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href || pathname.startsWith(href + '/');
             return (
               <Link key={href} href={href} onClick={() => setMobileOpen(false)}>
                 <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${isActive ? 'bg-healthcare-green/10 text-healthcare-green font-medium' : 'text-muted-foreground hover:bg-accent hover:text-foreground'}`}>
                   <Icon className={`h-5 w-5 flex-shrink-0 ${isActive ? 'text-healthcare-green' : ''}`} />
-                  {sidebarOpen && <span className="truncate">{label}</span>}
+                  {(sidebarOpen || mobileOpen) && <span className="truncate">{label}</span>}
                 </div>
               </Link>
             );
           })}
         </nav>
 
-        <div className="absolute bottom-0 left-0 right-0 p-2 border-t">
-          <Link href="/settings">
+        <div className="shrink-0 p-2 border-t">
+          <Link href="/settings" onClick={() => setMobileOpen(false)}>
             <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors`}>
               <Settings className="h-5 w-5 flex-shrink-0" />
-              {sidebarOpen && <span>Settings</span>}
+              {(sidebarOpen || mobileOpen) && <span>Settings</span>}
             </div>
           </Link>
         </div>
@@ -120,14 +123,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
       <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:pl-64' : 'lg:pl-16'}`}>
         <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-md border-b">
-          <div className="flex items-center justify-between h-16 px-4 md:px-6">
+          <div className="flex items-center justify-between gap-2 h-16 px-4 md:px-6">
             <div className="flex items-center gap-3">
-              <button onClick={() => setMobileOpen(true)} className="lg:hidden p-2 rounded-md hover:bg-accent">
+              <button type="button" aria-label="Open navigation" aria-expanded={mobileOpen} aria-controls="dashboard-navigation" onClick={() => setMobileOpen(true)} className="lg:hidden p-2 rounded-md hover:bg-accent">
                 <Menu className="h-5 w-5" />
               </button>
               <div className="relative hidden sm:block">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <input type="search" placeholder={t('patient.searchPatients')} className="h-9 w-64 rounded-md border border-input bg-background pl-9 pr-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                <input type="search" placeholder={t('patient.searchPatients')} className="h-9 w-44 xl:w-64 rounded-md border border-input bg-background pl-9 pr-3 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
               </div>
             </div>
 
@@ -158,8 +161,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   {user.avatar_url ? <AvatarImage src={user.avatar_url} /> : null}
                   <AvatarFallback className="bg-healthcare-green/10 text-healthcare-green text-xs">{getInitials(user.name)}</AvatarFallback>
                 </Avatar>
-                <div className="hidden md:block">
-                  <p className="text-sm font-medium leading-tight">{user.name}</p>
+                <div className="hidden max-w-32 xl:block">
+                  <p className="truncate text-sm font-medium leading-tight">{user.name}</p>
                   <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
                 </div>
               </div>
@@ -171,7 +174,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        <main className="p-4 md:p-6 lg:p-8">{children}</main>
+        <main className="min-w-0 p-4 md:p-6 lg:p-8">{children}</main>
       </div>
     </div>
   );

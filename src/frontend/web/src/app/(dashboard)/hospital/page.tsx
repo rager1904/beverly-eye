@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { BedOccupancy } from '@/components/dashboard/BedOccupancy';
 import { DiseaseAlerts } from '@/components/dashboard/DiseaseAlerts';
-import { Building2, TrendingUp, AlertTriangle, Users, Shield, MapPin, Activity, Loader2 } from 'lucide-react';
+import { Building2, TrendingUp, AlertTriangle, Users, Shield, MapPin, Activity, Loader2, FileText } from 'lucide-react';
 import { AiChatWidget } from '@/components/patient/AiChatWidget';
 import Link from 'next/link';
 
@@ -22,6 +22,7 @@ export default function HospitalAdminPage() {
   const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [dashboard, setDashboard] = useState<any>(null);
   const token = useAuthStore((s) => s.accessToken);
+  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -90,6 +91,11 @@ export default function HospitalAdminPage() {
               <Card>
                 <CardHeader><CardTitle className="text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
+                  {isAdmin && (
+                    <Button className="w-full justify-start" variant="outline" asChild>
+                      <Link href="/emr"><FileText className="mr-2 h-4 w-4" />EMR</Link>
+                    </Button>
+                  )}
                   <Button className="w-full justify-start" variant="outline" asChild><Link href="/hospital/admit">Admit patient</Link></Button>
                   <Button className="w-full justify-start" variant="outline" asChild>
                     <Link href="/public-health"><Activity className="h-4 w-4 mr-2" />Public Health Dashboard</Link>

@@ -21,7 +21,7 @@ const sidebarItems = [
   { href: '/patient/education', label: 'Health Education', icon: BookOpen, roles: ['patient'] },
   { href: '/hospital', label: 'Hospital Admin', icon: LayoutDashboard, roles: ['admin'] },
   { href: '/telemedicine', label: 'Telemedicine', icon: Video, roles: ['provider', 'patient', 'nurse'] },
-  { href: '/emr', label: 'EMR', icon: FileText, roles: ['provider', 'nurse'] },
+  { href: '/emr', label: 'EMR', icon: FileText, roles: ['provider', 'nurse', 'admin'] },
   { href: '/patient-flow', label: 'Patient Flow', icon: Activity, roles: ['provider', 'nurse', 'admin', 'records_officer', 'medical_records', 'clinical_officer', 'receptionist', 'lab_tech', 'pharmacist'] },
   { href: '/clinical-notes', label: 'Clinical Notes', icon: FileText, roles: ['provider', 'nurse', 'admin'] },
   { href: '/analytics', label: 'Analytics', icon: BarChart3, roles: ['provider', 'admin'] },

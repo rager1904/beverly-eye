@@ -92,9 +92,17 @@ export default function HospitalAdminPage() {
                 <CardHeader><CardTitle className="text-lg">Quick Actions</CardTitle></CardHeader>
                 <CardContent className="space-y-2">
                   {isAdmin && (
-                    <Button className="w-full justify-start" variant="outline" asChild>
-                      <Link href="/emr"><FileText className="mr-2 h-4 w-4" />EMR</Link>
-                    </Button>
+                    <>
+                      <Button className="w-full justify-start" variant="outline" asChild>
+                        <Link href="/emr"><FileText className="mr-2 h-4 w-4" />EMR</Link>
+                      </Button>
+                      <Button className="w-full justify-start" variant="outline" asChild>
+                        <Link href="/settings/hospitals"><Building2 className="mr-2 h-4 w-4" />Manage facilities</Link>
+                      </Button>
+                      <Button className="w-full justify-start" variant="outline" asChild>
+                        <Link href="/settings/directory"><Users className="mr-2 h-4 w-4" />Manage staff</Link>
+                      </Button>
+                    </>
                   )}
                   <Button className="w-full justify-start" variant="outline" asChild><Link href="/hospital/admit">Admit patient</Link></Button>
                   <Button className="w-full justify-start" variant="outline" asChild>

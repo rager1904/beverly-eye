@@ -2,6 +2,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.backend.database import get_db
@@ -14,6 +15,7 @@ from src.backend.services.hospital_management.schemas import (
     EquipmentResponse,
     HospitalCreate,
     HospitalResponse,
+    HospitalUpdate,
     InventoryCreate,
     InventoryResponse,
 )
@@ -45,12 +47,12 @@ async def get_hospital(session: HospitalSession = Depends(get_hospital_session))
 
 @router.get("/list", response_model=list[HospitalResponse])
 async def list_hospitals(
-    request: Request,
+    include_inactive: bool = Query(False),
     _: None = Depends(_require_admin),
     db: AsyncSession = Depends(get_db),
 ):
     service = HospitalService(db)
-    return await service.list_hospitals()
+    return await service.list_hospitals(include_inactive=include_inactive)
 
 
 @router.post("", response_model=HospitalResponse, status_code=status.HTTP_201_CREATED)
@@ -65,6 +67,34 @@ async def create_hospital(
 
 
 # ─── Departments ───────────────────────────────────────────────────────────────
+@router.put("/facilities/{hospital_id}", response_model=HospitalResponse)
+async def update_facility(
+    hospital_id: uuid.UUID,
+    data: HospitalUpdate,
+    _: None = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        facility = await HospitalService(db).update_facility(hospital_id, data.model_dump())
+    except IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="Facility code is already in use") from exc
+    if facility is None:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    return facility
+
+
+@router.delete("/facilities/{hospital_id}", response_model=HospitalResponse)
+async def archive_facility(
+    hospital_id: uuid.UUID,
+    _: None = Depends(_require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    facility = await HospitalService(db).update_facility(hospital_id, {"is_active": False})
+    if facility is None:
+        raise HTTPException(status_code=404, detail="Facility not found")
+    return facility
+
+
 @router.get("/departments", response_model=list[DepartmentResponse])
 async def list_departments(
     include_inactive: bool = Query(False),

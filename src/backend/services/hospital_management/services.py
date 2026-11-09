@@ -39,13 +39,23 @@ class HospitalService:
         await self.db.flush()
         return hospital
 
-    async def list_hospitals(self) -> list[models.Hospital]:
-        result = await self.db.execute(
-            select(models.Hospital).where(
-                models.Hospital.is_active == True,
-            ).order_by(models.Hospital.name)
-        )
+    async def list_hospitals(self, include_inactive: bool = False) -> list[models.Hospital]:
+        stmt = select(models.Hospital).order_by(models.Hospital.name)
+        if not include_inactive:
+            stmt = stmt.where(models.Hospital.is_active.is_(True))
+        result = await self.db.execute(stmt)
         return list(result.scalars().all())
+
+    async def update_facility(
+        self, hospital_id: uuid.UUID, changes: dict,
+    ) -> Optional[models.Hospital]:
+        result = await self.db.execute(
+            update(models.Hospital)
+            .where(models.Hospital.id == hospital_id)
+            .values(**changes)
+            .returning(models.Hospital)
+        )
+        return result.scalar_one_or_none()
 
     async def get_departments(self, include_inactive: bool = False) -> list[models.Department]:
         stmt = select(models.Department).where(

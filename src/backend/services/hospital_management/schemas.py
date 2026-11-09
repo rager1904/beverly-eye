@@ -37,6 +37,20 @@ class HospitalCreate(HospitalBase):
     pass
 
 
+class HospitalUpdate(HospitalBase):
+    name: str = Field(min_length=2, max_length=300)
+    code: str = Field(min_length=2, max_length=20)
+    province: str = Field(min_length=1, max_length=100)
+    district: str = Field(min_length=1, max_length=100)
+    city: Optional[str] = Field(None, max_length=100)
+    address_line: Optional[str] = Field(None, max_length=500)
+    phone: Optional[str] = Field(None, max_length=20)
+    email: Optional[str] = Field(None, max_length=200)
+    website: Optional[str] = Field(None, max_length=200)
+    bed_count: int = Field(ge=0, le=2147483647)
+    is_active: bool
+
+
 class HospitalResponse(HospitalBase):
     id: uuid.UUID
     is_active: bool

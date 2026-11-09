@@ -31,7 +31,7 @@ const sidebarItems = [
   { href: '/hospital/admit', label: 'Admit Patient', icon: Building2, roles: ['provider', 'nurse', 'admin'] },
   { href: '/ai-guide', label: 'AI Assistant Guide', icon: Bot, roles: ['patient', 'provider', 'nurse', 'admin', 'lab_tech', 'pharmacist', 'public_health'] },
   { href: '/settings/users', label: 'User Management', icon: UserCog, roles: ['admin'] },
-  { href: '/settings/directory', label: 'Departments & Doctors', icon: Users, roles: ['admin'] },
+  { href: '/settings/directory', label: 'Departments & Staff', icon: Users, roles: ['admin'] },
   { href: '/settings/hospitals', label: 'Facilities', icon: Building2, roles: ['admin'] },
 ];
 

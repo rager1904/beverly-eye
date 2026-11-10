@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthStore } from '@/lib/auth';
+import { api } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,6 @@ import { toast } from 'sonner';
 
 export default function AddMedicationPage() {
   const router = useRouter();
-  const token = useAuthStore.getState().accessToken;
   const [medicationName, setMedicationName] = useState('');
   const [genericName, setGenericName] = useState('');
   const [category, setCategory] = useState('');
@@ -28,39 +27,29 @@ export default function AddMedicationPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!medicationName || !quantity) {
+    if (!medicationName.trim() || quantity === "") {
       toast.error('Please fill in medication name and quantity');
       return;
     }
     setSubmitting(true);
     try {
-      const res = await fetch('/api/v1/emr/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          order_type: 'medication',
-          medication_name: medicationName,
-          generic_name: genericName || undefined,
-          category: category || undefined,
-          quantity: parseInt(quantity),
-          unit,
-          reorder_level: reorderLevel ? parseInt(reorderLevel) : undefined,
-          expiry_date: expiryDate || undefined,
-          supplier: supplier || undefined,
-          cost_price: costPrice ? parseFloat(costPrice) : undefined,
-          selling_price: sellingPrice ? parseFloat(sellingPrice) : undefined,
-          batch_number: batchNumber || undefined,
-        }),
+      await api.post('/pharmacy/inventory', {
+        medication_name: medicationName.trim(),
+        generic_name: genericName.trim() || undefined,
+        category: category || undefined,
+        quantity: Number(quantity),
+        unit,
+        reorder_level: reorderLevel === '' ? undefined : Number(reorderLevel),
+        expiry_date: expiryDate || undefined,
+        supplier: supplier.trim() || undefined,
+        cost_price: costPrice || undefined,
+        selling_price: sellingPrice || undefined,
+        batch_number: batchNumber.trim() || undefined,
       });
-      if (res.ok) {
-        toast.success('Medication added to inventory');
-        router.push('/pharmacy');
-      } else {
-        const data = await res.json();
-        toast.error(data.detail || 'Failed to add medication');
-      }
-    } catch {
-      toast.error('Network error. Please try again.');
+      toast.success('Medication added to inventory');
+      router.push('/pharmacy/inventory');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to add medication');
     } finally {
       setSubmitting(false);
     }

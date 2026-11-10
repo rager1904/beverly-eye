@@ -150,6 +150,7 @@ def setup_rbac_middleware(app: FastAPI) -> None:
         "/api/v1/emr/orders": "lab:read",
         "/api/v1/appointments": "appointment:read",
         "/api/v1/lab": "lab:read",
+        "/api/v1/pharmacy/inventory": {"GET": "pharmacy:read", "default": "pharmacy:write"},
         "/api/v1/pharmacy": "pharmacy:read",
         "/api/v1/telemedicine": "telemedicine:read",
         "/api/v1/disease-surveillance": "disease_surveillance:read",

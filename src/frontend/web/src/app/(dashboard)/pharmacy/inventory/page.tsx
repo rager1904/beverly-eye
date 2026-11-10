@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useAuthStore } from '@/lib/auth';
+import { useDeferredValue, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api-client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Package, Search, ArrowLeft, AlertTriangle, Plus, Loader2 } from 'lucide-react';
+import { Package, Search, ArrowLeft, Plus, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
 interface InventoryItem {
@@ -16,41 +17,13 @@ interface InventoryItem {
 
 export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const token = useAuthStore((s) => s.accessToken);
-
-  const fetchInventory = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch('/api/v1/emr/orders?per_page=50', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      // Use medications as inventory proxy if no dedicated endpoint
-      if (res.ok) {
-        const data = await res.json();
-        const items = data.items || data || [];
-        setInventory(items.map((i: any) => ({
-          id: i.id,
-          medication_name: i.medication_name || i.order_description || 'Item',
-          category: i.order_type || i.result_type,
-          quantity: 0,
-          unit: i.result_unit || 'units',
-        })));
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => { fetchInventory(); }, [fetchInventory]);
-
-  const filtered = inventory.filter((i) =>
-    (i.medication_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (i.category || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const search = useDeferredValue(searchTerm.trim());
+  const inventory = useQuery({
+    queryKey: ['pharmacy-stock', search],
+    queryFn: () => api.get<InventoryItem[]>(`/pharmacy/inventory?q=${encodeURIComponent(search)}`),
+    staleTime: 0,
+  });
+  const items = inventory.data ?? [];
 
   return (
     <div className="space-y-6">
@@ -69,19 +42,21 @@ export default function InventoryPage() {
 
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-        <Input placeholder="Search inventory..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+        <Input placeholder="Search inventory..." maxLength={200} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
       </div>
 
-      {loading ? (
+      {inventory.isPending ? (
         <div className="flex items-center justify-center h-32"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-      ) : filtered.length === 0 ? (
+      ) : inventory.isError ? (
+        <p role="alert" className="text-sm text-destructive">{inventory.error.message}</p>
+      ) : items.length === 0 ? (
         <Card><CardContent className="text-center py-8 text-muted-foreground">
           <Package className="h-8 w-8 mx-auto mb-2 opacity-50" />
           <p>No inventory items found. Add medications or check your stock orders.</p>
         </CardContent></Card>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((item) => (
+          {items.map((item) => (
             <Card key={item.id}>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
@@ -91,6 +66,7 @@ export default function InventoryPage() {
                 <div className="mt-2 text-sm text-muted-foreground">
                   <p>Category: {item.category || 'General'}</p>
                   <p>Qty: {item.quantity} {item.unit || 'units'}</p>
+                  {item.expiry_date && <p>Expires: {item.expiry_date}</p>}
                 </div>
               </CardContent>
             </Card>

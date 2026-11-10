@@ -12,6 +12,7 @@ from src.backend.services.appointments.routers import appointments_router
 from src.backend.services.hospital_management.routers import hospitals
 from src.backend.services.hospital_management.routers import staff
 from src.backend.services.hospital_management.routers import beds
+from src.backend.services.pharmacy import stock
 from src.backend.services.patient_flow.routers import journeys as patient_flow
 
 logging.basicConfig(level=logging.INFO)
@@ -51,6 +52,8 @@ def create_app() -> FastAPI:
         prefix="/api/v1/patient-flow",
         tags=["Patient Flow"],
     )
+
+    app.include_router(stock.router, prefix="/api/v1/pharmacy/inventory", tags=["Pharmacy"])
 
     setup_rbac_middleware(app)
 

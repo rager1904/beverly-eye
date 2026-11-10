@@ -25,6 +25,7 @@ import type { FlowStepOutcome } from '@/types';
 
 interface CloseJourneyDialogProps {
   journeyId: string;
+  facilityId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onClosed?: () => void;
@@ -40,13 +41,14 @@ const outcomeOptions: { value: FlowStepOutcome; label: string }[] = [
 
 export function CloseJourneyDialog({
   journeyId,
+  facilityId,
   open,
   onOpenChange,
   onClosed,
 }: CloseJourneyDialogProps) {
   const [outcome, setOutcome] = useState<FlowStepOutcome>('completed');
   const [reason, setReason] = useState('');
-  const closeJourney = useCloseJourney(journeyId);
+  const closeJourney = useCloseJourney(journeyId, facilityId);
 
   useEffect(() => {
     if (!open) return;

@@ -29,29 +29,29 @@ from .models import (
 # ─── Patient ────────────────────────────────────────────────────────────────────
 class PatientBase(BaseModel):
     nrc_number: Optional[str] = Field(None, max_length=20, description="Zambia NRC number")
-    smartcare_id: Optional[str] = None
+    smartcare_id: Optional[str] = Field(None, max_length=50)
     first_name: str = Field(..., max_length=100)
     last_name: str = Field(..., max_length=100)
-    middle_name: Optional[str] = None
+    middle_name: Optional[str] = Field(None, max_length=100)
     date_of_birth: date
     gender: Gender
     marital_status: Optional[MaritalStatus] = None
-    occupation: Optional[str] = None
+    occupation: Optional[str] = Field(None, max_length=100)
     phone: str = Field(..., max_length=20)
     email: Optional[EmailStr] = None
-    address_line: Optional[str] = None
-    city: Optional[str] = None
+    address_line: Optional[str] = Field(None, max_length=500)
+    city: Optional[str] = Field(None, max_length=100)
     province: Optional[Province] = None
-    district: Optional[str] = None
-    nationality: Optional[str] = None
-    emergency_contact_name: Optional[str] = None
-    emergency_contact_phone: Optional[str] = None
-    emergency_contact_relation: Optional[str] = None
-    insurance_provider: Optional[str] = None
-    insurance_number: Optional[str] = None
+    district: Optional[str] = Field(None, max_length=100)
+    nationality: Optional[str] = Field(None, max_length=100)
+    emergency_contact_name: Optional[str] = Field(None, max_length=200)
+    emergency_contact_phone: Optional[str] = Field(None, max_length=20)
+    emergency_contact_relation: Optional[str] = Field(None, max_length=100)
+    insurance_provider: Optional[str] = Field(None, max_length=200)
+    insurance_number: Optional[str] = Field(None, max_length=50)
     insurance_expiry: Optional[date] = None
     nhima_member: bool = False
-    nhima_number: Optional[str] = None
+    nhima_number: Optional[str] = Field(None, max_length=50)
     language_preference: Optional[str] = "en"
     notes: Optional[str] = None
 
@@ -60,6 +60,8 @@ class PatientBase(BaseModel):
     def validate_phone(cls, v: str) -> str:
         if v and not v.startswith("+"):
             v = "+260" + v.lstrip("0")
+        if len(v) > 20:
+            raise ValueError("Phone number must be at most 20 characters after normalization")
         return v
 
 

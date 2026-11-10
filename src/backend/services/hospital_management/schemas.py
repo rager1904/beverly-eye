@@ -20,24 +20,6 @@ from .models import (
 
 # ─── Hospital ──────────────────────────────────────────────────────────────────
 class HospitalBase(BaseModel):
-    name: str
-    code: str
-    level: HospitalLevel
-    address_line: Optional[str] = None
-    city: Optional[str] = None
-    province: str
-    district: str
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    website: Optional[str] = None
-    bed_count: int = 0
-
-
-class HospitalCreate(HospitalBase):
-    pass
-
-
-class HospitalUpdate(HospitalBase):
     name: str = Field(min_length=2, max_length=300)
     code: str = Field(min_length=2, max_length=20)
     province: str = Field(min_length=1, max_length=100)
@@ -48,6 +30,14 @@ class HospitalUpdate(HospitalBase):
     email: Optional[str] = Field(None, max_length=200)
     website: Optional[str] = Field(None, max_length=200)
     bed_count: int = Field(ge=0, le=2147483647)
+    level: HospitalLevel
+
+
+class HospitalCreate(HospitalBase):
+    bed_count: int = Field(0, ge=0, le=2147483647)
+
+
+class HospitalUpdate(HospitalBase):
     is_active: bool
 
 
@@ -61,11 +51,11 @@ class HospitalResponse(HospitalBase):
 
 # ─── Department ────────────────────────────────────────────────────────────────
 class DepartmentCreate(BaseModel):
-    name: str
-    code: Optional[str] = None
-    head_of_department: Optional[str] = None
-    location: Optional[str] = None
-    phone_extension: Optional[str] = None
+    name: str = Field(min_length=1, max_length=200)
+    code: Optional[str] = Field(None, max_length=20)
+    head_of_department: Optional[str] = Field(None, max_length=200)
+    location: Optional[str] = Field(None, max_length=200)
+    phone_extension: Optional[str] = Field(None, max_length=20)
 
 
 class DepartmentResponse(BaseModel):
@@ -149,16 +139,16 @@ class AdmissionCreate(BaseModel):
 
 # ─── Staff ─────────────────────────────────────────────────────────────────────
 class StaffCreate(BaseModel):
-    user_id: Optional[str] = None
-    first_name: str
-    last_name: str
+    user_id: Optional[str] = Field(None, max_length=50)
+    first_name: str = Field(min_length=1, max_length=100)
+    last_name: str = Field(min_length=1, max_length=100)
     role: StaffRole
-    speciality: Optional[str] = None
+    speciality: Optional[str] = Field(None, max_length=200)
     department_id: Optional[uuid.UUID] = None
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    license_number: Optional[str] = None
-    max_hours_per_week: int = 40
+    phone: Optional[str] = Field(None, max_length=20)
+    email: Optional[str] = Field(None, max_length=200)
+    license_number: Optional[str] = Field(None, max_length=50)
+    max_hours_per_week: int = Field(40, ge=1, le=168)
 
 
 class StaffResponse(BaseModel):

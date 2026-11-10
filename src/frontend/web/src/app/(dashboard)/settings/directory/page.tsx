@@ -13,6 +13,7 @@ import {
   UserRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { useAuthStore } from '@/lib/auth';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -94,21 +95,30 @@ function clean<T extends object>(value: T): T {
 export default function DirectoryPage() {
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'admin';
+  const [facilityId, setFacilityId] = useState('');
 
-  const departments = useDepartments(false);
-  const staff = useStaffDirectory();
+  const departments = useDepartments(false, facilityId);
+  const staff = useStaffDirectory(facilityId);
 
-  const createDepartment = useCreateDepartment();
-  const updateDepartment = useUpdateDepartment();
-  const deactivateDepartment = useDeactivateDepartment();
-  const createStaff = useCreateStaff();
-  const updateStaff = useUpdateStaff();
-  const deactivateStaff = useDeactivateStaff();
+  const createDepartment = useCreateDepartment(facilityId);
+  const updateDepartment = useUpdateDepartment(facilityId);
+  const deactivateDepartment = useDeactivateDepartment(facilityId);
+  const createStaff = useCreateStaff(facilityId);
+  const updateStaff = useUpdateStaff(facilityId);
+  const deactivateStaff = useDeactivateStaff(facilityId);
 
   const [departmentForm, setDepartmentForm] = useState<DepartmentInput>(emptyDepartment);
   const [editingDepartment, setEditingDepartment] = useState<HospitalDepartment | null>(null);
   const [staffForm, setStaffForm] = useState<StaffInput>(emptyStaff);
   const [editingStaff, setEditingStaff] = useState<HospitalStaff | null>(null);
+
+  const changeFacility = (value: string) => {
+    setFacilityId(value);
+    setEditingDepartment(null);
+    setDepartmentForm(emptyDepartment);
+    setEditingStaff(null);
+    setStaffForm(emptyStaff);
+  };
 
   const activeDepartments = useMemo(
     () => (departments.data ?? []).filter((department) => department.is_active),
@@ -231,6 +241,13 @@ export default function DirectoryPage() {
 
   return (
     <div className="space-y-6">
+      <FacilitySelect
+        value={facilityId}
+        onChange={changeFacility}
+        disabled={createStaff.isPending || updateStaff.isPending || deactivateStaff.isPending ||
+          createDepartment.isPending || updateDepartment.isPending || deactivateDepartment.isPending}
+      />
+      {!facilityId && <p className="text-sm text-muted-foreground">Showing your current facility. Select another facility to manage its directory.</p>}
       <div>
         <Button variant="ghost" size="sm" asChild>
           <Link href="/hospital">

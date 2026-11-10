@@ -1,7 +1,8 @@
 import uuid
 from typing import Optional
 
-from fastapi import Depends, Header, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Query, Request, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.backend.database import get_db
@@ -26,9 +27,28 @@ async def get_hospital_id_header(request: Request, x_hospital_id: Optional[str] 
             return DEFAULT_HOSPITAL_ID
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Hospital-Id header is required")
     try:
-        return uuid.UUID(x_hospital_id)
+        return uuid.UUID(str(x_hospital_id))
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid hospital_id format")
+
+
+async def get_selected_facility(
+    request: Request,
+    facility_id: Optional[uuid.UUID] = Query(None),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[uuid.UUID]:
+    if facility_id is None:
+        return None
+    if not _is_platform_admin(request):
+        raise HTTPException(status_code=403, detail="Admin role required to select a facility")
+    from .models import Hospital
+
+    active_id = await db.scalar(
+        select(Hospital.id).where(Hospital.id == facility_id, Hospital.is_active.is_(True))
+    )
+    if active_id is None:
+        raise HTTPException(status_code=404, detail="Active facility not found")
+    return active_id
 
 
 class HospitalSession:
@@ -39,9 +59,10 @@ class HospitalSession:
         hospital_id: uuid.UUID = Depends(get_hospital_id_header),
         user_id: Optional[str] = Header(None, alias="X-User-Id"),
         user_name: Optional[str] = Header(None, alias="X-User-Name"),
+        selected_facility: Optional[uuid.UUID] = Depends(get_selected_facility),
     ):
         self.db = db
-        self.hospital_id = hospital_id
+        self.hospital_id = selected_facility or hospital_id
         self.user_id = getattr(request.state, "user_id", None) or user_id
         self.user_name = getattr(request.state, "username", None) or user_name
 

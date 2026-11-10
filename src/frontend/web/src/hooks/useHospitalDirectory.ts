@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { withFacility } from '@/lib/facility-scope';
 import { api } from '@/lib/api-client';
 import type {
   HospitalDepartment,
@@ -52,71 +53,71 @@ function invalidateDirectory(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ['patient-flow', 'destinations'] });
 }
 
-export function useDepartments(includeInactive = true) {
+export function useDepartments(includeInactive = true, facilityId?: string) {
   return useQuery<HospitalDepartment[]>({
-    queryKey: directoryKeys.departments(includeInactive),
+    queryKey: [...directoryKeys.departments(includeInactive), facilityId],
     queryFn: () =>
       api.get<HospitalDepartment[]>(
-        `/hospital/departments${includeInactive ? '?include_inactive=true' : ''}`
+        withFacility(`/hospital/departments${includeInactive ? '?include_inactive=true' : ''}`, facilityId)
       ),
   });
 }
 
-export function useStaffDirectory() {
+export function useStaffDirectory(facilityId?: string) {
   return useQuery<StaffListResponse>({
-    queryKey: directoryKeys.staff,
-    queryFn: () => api.get<StaffListResponse>('/hospital/staff?per_page=100'),
+    queryKey: [...directoryKeys.staff, facilityId],
+    queryFn: () => api.get<StaffListResponse>(withFacility('/hospital/staff?per_page=100', facilityId)),
   });
 }
 
-export function useCreateDepartment() {
+export function useCreateDepartment(facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: DepartmentInput) =>
-      api.post<HospitalDepartment>('/hospital/departments', input),
+      api.post<HospitalDepartment>(withFacility('/hospital/departments', facilityId), input),
     onSuccess: () => invalidateDirectory(queryClient),
   });
 }
 
-export function useUpdateDepartment() {
+export function useUpdateDepartment(facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: Partial<DepartmentInput> }) =>
-      api.patch<HospitalDepartment>(`/hospital/departments/${id}`, input),
+      api.patch<HospitalDepartment>(withFacility(`/hospital/departments/${id}`, facilityId), input),
     onSuccess: () => invalidateDirectory(queryClient),
   });
 }
 
-export function useDeactivateDepartment() {
+export function useDeactivateDepartment(facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      api.delete<HospitalDepartment>(`/hospital/departments/${id}`),
+      api.delete<HospitalDepartment>(withFacility(`/hospital/departments/${id}`, facilityId)),
     onSuccess: () => invalidateDirectory(queryClient),
   });
 }
 
-export function useCreateStaff() {
+export function useCreateStaff(facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: StaffInput) => api.post<HospitalStaff>('/hospital/staff', input),
+    mutationFn: (input: StaffInput) => api.post<HospitalStaff>(withFacility('/hospital/staff', facilityId), input),
     onSuccess: () => invalidateDirectory(queryClient),
   });
 }
 
-export function useUpdateStaff() {
+export function useUpdateStaff(facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: Partial<StaffInput> }) =>
-      api.patch<HospitalStaff>(`/hospital/staff/${id}`, input),
+      api.patch<HospitalStaff>(withFacility(`/hospital/staff/${id}`, facilityId), input),
     onSuccess: () => invalidateDirectory(queryClient),
   });
 }
 
-export function useDeactivateStaff() {
+export function useDeactivateStaff(facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.delete<HospitalStaff>(`/hospital/staff/${id}`),
+    mutationFn: (id: string) => api.delete<HospitalStaff>(withFacility(`/hospital/staff/${id}`, facilityId)),
     onSuccess: () => invalidateDirectory(queryClient),
   });
 }

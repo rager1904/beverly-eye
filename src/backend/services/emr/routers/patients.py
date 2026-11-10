@@ -1,6 +1,8 @@
 import uuid
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from src.backend.services.emr.dependencies import EMRSession, get_emr_session
@@ -42,6 +44,10 @@ async def register_patient(data: PatientCreate, session: EMRSession = Depends(ge
     try:
         patient = await service.register_patient(data)
         return patient
+    except IntegrityError as exc:
+        if getattr(exc.orig, "sqlstate", None) != "23505":
+            raise
+        raise HTTPException(status_code=409, detail="A patient with this NRC or SmartCare ID already exists") from exc
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
 

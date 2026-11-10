@@ -333,7 +333,21 @@ class StaffService:
         self.hospital_id = hospital_id
         self.user_id = user_id
 
+    async def _validate_department(self, department_id: Optional[uuid.UUID]) -> None:
+        if department_id is None:
+            return
+        department = await self.db.scalar(
+            select(models.Department.id).where(
+                models.Department.id == department_id,
+                models.Department.hospital_id == self.hospital_id,
+                models.Department.is_active.is_(True),
+            )
+        )
+        if department is None:
+            raise ValueError("Choose an active department in this facility")
+
     async def create_staff(self, data: schemas.StaffCreate) -> models.Staff:
+        await self._validate_department(data.department_id)
         staff = models.Staff(hospital_id=self.hospital_id, created_by=self.user_id, **data.model_dump())
         self.db.add(staff)
         await self.db.flush()
@@ -354,7 +368,13 @@ class StaffService:
         staff = await self.get_staff(staff_id)
         if staff is None:
             raise LookupError("Staff member not found")
-        for field, value in data.model_dump(exclude_unset=True).items():
+        changes = data.model_dump(exclude_unset=True)
+        for field in ("first_name", "last_name", "role", "is_active", "max_hours_per_week"):
+            if field in changes and changes[field] is None:
+                raise ValueError(f"{field} cannot be null")
+        if "department_id" in changes and changes["department_id"] != staff.department_id:
+            await self._validate_department(changes["department_id"])
+        for field, value in changes.items():
             setattr(staff, field, value)
         staff.updated_by = self.user_id
         await self.db.flush()

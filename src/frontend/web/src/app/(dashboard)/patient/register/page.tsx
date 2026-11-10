@@ -2,7 +2,10 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { FacilitySelect } from '@/components/FacilitySelect';
 import { useAuthStore } from '@/lib/auth';
+import { withFacility } from '@/lib/facility-scope';
+import { clinicalApi } from '@/lib/clinical-api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +16,6 @@ import { toast } from 'sonner';
 import { useFlowDestinations, useStartJourney } from '@/hooks/usePatientFlow';
 import type {
   DestinationStaff,
-  FlowStepType,
   JourneyPriority,
   PaymentScheme,
   VisitPaymentStatus,
@@ -36,6 +38,8 @@ const paymentSchemes: { value: PaymentScheme; label: string }[] = [
 
 export default function RegisterPatientPage() {
   const router = useRouter();
+  const isAdmin = useAuthStore((state) => state.user?.role === 'admin');
+  const [facilityId, setFacilityId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     first_name: '', last_name: '', date_of_birth: '', gender: '',
@@ -53,8 +57,8 @@ export default function RegisterPatientPage() {
   const [providerId, setProviderId] = useState('');
   const [chiefComplaint, setChiefComplaint] = useState('');
 
-  const { data: destinations } = useFlowDestinations();
-  const startJourneyMutation = useStartJourney();
+  const { data: destinations } = useFlowDestinations(facilityId, !isAdmin || !!facilityId);
+  const startJourneyMutation = useStartJourney(facilityId);
 
   const update = (key: string, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -80,9 +84,16 @@ export default function RegisterPatientPage() {
       toast.error('Please fill in all required fields');
       return;
     }
+    if (isAdmin && !facilityId) {
+      toast.error('Select a facility before registering the patient');
+      return;
+    }
+    if (startJourney && !selectedServicePoint) {
+      toast.error('Wait for routing options or turn off visit routing to register now');
+      return;
+    }
     setSubmitting(true);
     try {
-      const token = useAuthStore.getState().accessToken;
       // Optional form fields start as empty strings; omit them so Pydantic
       // does not try to validate "" as an email, province enum, etc.
       const payload = Object.fromEntries(
@@ -100,20 +111,13 @@ export default function RegisterPatientPage() {
         patientPayload.insurance_provider = schemeLabel;
         if (schemeNumber) patientPayload.insurance_number = schemeNumber;
       }
-      const res = await fetch('/api/v1/emr/patients', {
+      const patient = await clinicalApi<{ id: string }>(withFacility('emr/patients', facilityId), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(patientPayload),
       });
-      if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.detail || 'Registration failed');
-        return;
-      }
+      if (!patient?.id) throw new Error('The server did not confirm registration.');
 
-      const patient = (await res.json()) as { id: string };
-
-      if (startJourney) {
+      if (startJourney && selectedServicePoint) {
         const department = destinations?.departments.find((item) => item.id === departmentId);
         const provider = destinations?.staff.find((item) => item.id === providerId);
         try {
@@ -125,8 +129,8 @@ export default function RegisterPatientPage() {
             payment_status: paymentStatus,
             scheme_number: schemeNumber || undefined,
             chief_complaint: chiefComplaint || undefined,
-            step_type: (selectedServicePoint?.step_type ?? servicePoint) as FlowStepType,
-            service_point: selectedServicePoint?.code ?? servicePoint,
+            step_type: selectedServicePoint.step_type,
+            service_point: selectedServicePoint.code,
             department_id: department?.id,
             department_name: department?.name,
             provider_id: provider?.user_id || provider?.id,
@@ -134,7 +138,7 @@ export default function RegisterPatientPage() {
             reason: 'Registered at reception',
           });
           toast.success(`Patient registered and routed (${journey.journey_number})`);
-          router.push(`/patient-flow/${journey.id}`);
+          router.push(withFacility(`/patient-flow/${journey.id}`, facilityId));
           return;
         } catch (error) {
           toast.warning(
@@ -149,8 +153,12 @@ export default function RegisterPatientPage() {
 
       toast.success('Patient registered successfully');
       router.push('/patient');
-    } catch {
-      toast.error('Network error. Please try again.');
+    } catch (error) {
+      if (error instanceof TypeError || error instanceof SyntaxError) {
+        toast.error('Could not confirm registration. Check the patient list before submitting again.');
+      } else {
+        toast.error(error instanceof Error ? error.message : 'Registration failed.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -177,6 +185,12 @@ export default function RegisterPatientPage() {
         <CardHeader><CardTitle>Patient Information</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {isAdmin && <FacilitySelect value={facilityId} disabled={submitting} onChange={(value) => {
+              setFacilityId(value);
+              setServicePoint('general');
+              setDepartmentId('');
+              setProviderId('');
+            }} />}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">First Name *</label>
@@ -335,6 +349,7 @@ export default function RegisterPatientPage() {
                         {paymentScheme === 'nhima' ? 'NHIMA number' : 'Scheme / member number'}
                       </label>
                       <Input
+                        maxLength={50}
                         value={schemeNumber}
                         onChange={(e) => setSchemeNumber(e.target.value)}
                         placeholder={

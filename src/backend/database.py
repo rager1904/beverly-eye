@@ -6,6 +6,7 @@ from src.backend.core.config.settings import settings
 engine = create_async_engine(
     settings.database_url,
     echo=settings.POSTGRES_ECHO or settings.DEBUG,
+    hide_parameters=True,
     pool_size=settings.POSTGRES_POOL_SIZE,
     max_overflow=settings.POSTGRES_MAX_OVERFLOW,
     pool_timeout=settings.POSTGRES_POOL_TIMEOUT,

@@ -131,7 +131,7 @@ class Hospital(Base, AuditMixin):
     )
     name: Mapped[str] = mapped_column(String(300))
     code: Mapped[str] = mapped_column(String(20), unique=True, index=True)
-    level: Mapped[HospitalLevel] = mapped_column(Enum(HospitalLevel))
+    level: Mapped[HospitalLevel] = mapped_column(Enum(HospitalLevel, native_enum=False))
     address_line: Mapped[Optional[str]] = mapped_column(String(500))
     city: Mapped[Optional[str]] = mapped_column(String(100))
     province: Mapped[str] = mapped_column(String(100))
@@ -231,7 +231,7 @@ class Staff(Base, AuditMixin, TenantMixin):
     user_id: Mapped[Optional[str]] = mapped_column(String(50), unique=True)
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
-    role: Mapped[StaffRole] = mapped_column(Enum(StaffRole))
+    role: Mapped[StaffRole] = mapped_column(Enum(StaffRole, native_enum=False))
     speciality: Mapped[Optional[str]] = mapped_column(String(200))
     department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True), ForeignKey("departments.id")

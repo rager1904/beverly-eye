@@ -5,6 +5,11 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.backend.database import get_db
+from src.backend.services.hospital_management.dependencies import (
+    DEFAULT_HOSPITAL_ID,
+    _is_platform_admin,
+    get_selected_facility,
+)
 
 
 async def get_hospital_id(
@@ -15,7 +20,7 @@ async def get_hospital_id(
     # trusted service-to-service calls where middleware did not provide a claim.
     raw = getattr(request.state, "hospital_id", None) or x_hospital_id
     if raw is None:
-        return None
+        return DEFAULT_HOSPITAL_ID if _is_platform_admin(request) else None
     try:
         return uuid.UUID(str(raw))
     except ValueError:
@@ -41,9 +46,10 @@ class EMRSession:
         db: AsyncSession = Depends(get_db),
         hospital_id: Optional[uuid.UUID] = Depends(get_hospital_id),
         current_user: tuple = Depends(get_current_user_id),
+        selected_facility: Optional[uuid.UUID] = Depends(get_selected_facility),
     ):
         self.db = db
-        self.hospital_id = hospital_id
+        self.hospital_id = selected_facility or hospital_id
         self.user_id, self.user_name = current_user
 
     async def verify_hospital_access(self) -> None:

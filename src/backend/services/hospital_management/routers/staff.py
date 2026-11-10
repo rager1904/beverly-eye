@@ -2,6 +2,8 @@ import uuid
 from datetime import date
 from typing import Optional
 
+from sqlalchemy.exc import IntegrityError
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from src.backend.services.hospital_management.dependencies import HospitalSession, get_hospital_session
@@ -33,7 +35,14 @@ async def create_staff(
     session: HospitalSession = Depends(get_hospital_session),
 ):
     service = StaffService(session.db, session.hospital_id, session.user_id)
-    return await service.create_staff(data)
+    try:
+        return await service.create_staff(data)
+    except IntegrityError as exc:
+        if getattr(exc.orig, "sqlstate", None) != "23505":
+            raise
+        raise HTTPException(status_code=409, detail="This user is already linked to a staff record") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/{staff_id}", response_model=StaffResponse)
@@ -56,6 +65,12 @@ async def update_staff(
     service = StaffService(session.db, session.hospital_id, session.user_id)
     try:
         return await service.update_staff(staff_id, data)
+    except IntegrityError as exc:
+        if getattr(exc.orig, "sqlstate", None) != "23505":
+            raise
+        raise HTTPException(status_code=409, detail="This user is already linked to a staff record") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 

@@ -26,6 +26,7 @@ import type { DestinationStaff, FlowStepType, JourneyPriority } from '@/types';
 
 interface RoutePatientDialogProps {
   journeyId: string;
+  facilityId?: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentServicePoint?: string | null;
@@ -40,6 +41,7 @@ const priorityOptions: { value: JourneyPriority; label: string }[] = [
 
 export function RoutePatientDialog({
   journeyId,
+  facilityId,
   open,
   onOpenChange,
   currentServicePoint,
@@ -52,8 +54,8 @@ export function RoutePatientDialog({
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
 
-  const { data: destinations } = useFlowDestinations();
-  const routePatient = useRoutePatient(journeyId);
+  const { data: destinations } = useFlowDestinations(facilityId);
+  const routePatient = useRoutePatient(journeyId, facilityId);
 
   useEffect(() => {
     if (!open) return;

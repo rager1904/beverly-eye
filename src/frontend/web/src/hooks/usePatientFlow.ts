@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { withFacility } from '@/lib/facility-scope';
 import { clinicalApi } from '@/lib/clinical-api';
 import type {
   FlowDestinations,
@@ -110,18 +111,19 @@ export function useFlowStats() {
   });
 }
 
-export function useFlowDestinations() {
+export function useFlowDestinations(facilityId?: string, enabled = true) {
   return useQuery<FlowDestinations>({
-    queryKey: flowKeys.destinations(),
-    queryFn: () => clinicalApi<FlowDestinations>('patient-flow/destinations'),
+    queryKey: [...flowKeys.destinations(), facilityId],
+    enabled,
+    queryFn: () => clinicalApi<FlowDestinations>(withFacility('patient-flow/destinations', facilityId)),
     staleTime: 60000,
   });
 }
 
-export function useJourney(journeyId: string) {
+export function useJourney(journeyId: string, facilityId?: string) {
   return useQuery<PatientJourney>({
-    queryKey: flowKeys.journey(journeyId),
-    queryFn: () => clinicalApi<PatientJourney>(`patient-flow/journeys/${journeyId}`),
+    queryKey: [...flowKeys.journey(journeyId), facilityId],
+    queryFn: () => clinicalApi<PatientJourney>(withFacility(`patient-flow/journeys/${journeyId}`, facilityId)),
     enabled: !!journeyId,
     refetchInterval: 15000,
   });
@@ -146,51 +148,51 @@ export function usePatientSearch(query: string) {
   });
 }
 
-export function useStartJourney() {
+export function useStartJourney(facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: StartJourneyInput) => post<PatientJourney>('patient-flow/journeys', input),
+    mutationFn: (input: StartJourneyInput) => post<PatientJourney>(withFacility('patient-flow/journeys', facilityId), input),
     onSuccess: () => invalidateFlow(queryClient),
   });
 }
 
-export function useRoutePatient(journeyId: string) {
+export function useRoutePatient(journeyId: string, facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: RoutePatientInput) =>
-      post<PatientJourney>(`patient-flow/journeys/${journeyId}/route`, input),
+      post<PatientJourney>(withFacility(`patient-flow/journeys/${journeyId}/route`, facilityId), input),
     onSuccess: () => invalidateFlow(queryClient),
   });
 }
 
-export function useCallStep(journeyId: string) {
+export function useCallStep(journeyId: string, facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (stepId: string) =>
-      post<PatientJourney>(`patient-flow/journeys/${journeyId}/steps/${stepId}/call`),
+      post<PatientJourney>(withFacility(`patient-flow/journeys/${journeyId}/steps/${stepId}/call`, facilityId)),
     onSuccess: () => invalidateFlow(queryClient),
   });
 }
 
-export function useStartStep(journeyId: string) {
+export function useStartStep(journeyId: string, facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (stepId: string) =>
-      post<PatientJourney>(`patient-flow/journeys/${journeyId}/steps/${stepId}/start`),
+      post<PatientJourney>(withFacility(`patient-flow/journeys/${journeyId}/steps/${stepId}/start`, facilityId)),
     onSuccess: () => invalidateFlow(queryClient),
   });
 }
 
-export function useCompleteStep(journeyId: string) {
+export function useCompleteStep(journeyId: string, facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ stepId, input }: { stepId: string; input: CompleteStepInput }) =>
-      post<PatientJourney>(`patient-flow/journeys/${journeyId}/steps/${stepId}/complete`, input),
+      post<PatientJourney>(withFacility(`patient-flow/journeys/${journeyId}/steps/${stepId}/complete`, facilityId), input),
     onSuccess: () => invalidateFlow(queryClient),
   });
 }
 
-export function useSkipStep(journeyId: string) {
+export function useSkipStep(journeyId: string, facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
@@ -202,7 +204,7 @@ export function useSkipStep(journeyId: string) {
       reason?: string;
       outcome?: FlowStepOutcome;
     }) =>
-      post<PatientJourney>(`patient-flow/journeys/${journeyId}/steps/${stepId}/skip`, {
+      post<PatientJourney>(withFacility(`patient-flow/journeys/${journeyId}/steps/${stepId}/skip`, facilityId), {
         reason,
         outcome: outcome ?? 'cancelled',
       }),
@@ -210,11 +212,11 @@ export function useSkipStep(journeyId: string) {
   });
 }
 
-export function useCloseJourney(journeyId: string) {
+export function useCloseJourney(journeyId: string, facilityId?: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CloseJourneyInput) =>
-      post<PatientJourney>(`patient-flow/journeys/${journeyId}/close`, input),
+      post<PatientJourney>(withFacility(`patient-flow/journeys/${journeyId}/close`, facilityId), input),
     onSuccess: () => invalidateFlow(queryClient),
   });
 }

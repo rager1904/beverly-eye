@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
   ArrowRight,
@@ -50,6 +50,11 @@ function minutesSince(value?: string | null): number {
 }
 
 export default function JourneyDetailPage() {
+  return <Suspense fallback={null}><JourneyDetail /></Suspense>;
+}
+
+function JourneyDetail() {
+  const facilityId = useSearchParams().get('facility_id') ?? undefined;
   const params = useParams();
   const rawId = params?.id;
   const journeyId = Array.isArray(rawId) ? rawId[0] ?? '' : rawId ?? '';
@@ -57,11 +62,11 @@ export default function JourneyDetailPage() {
   const [routeOpen, setRouteOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
 
-  const journey = useJourney(journeyId);
-  const callStep = useCallStep(journeyId);
-  const startStep = useStartStep(journeyId);
-  const completeStep = useCompleteStep(journeyId);
-  const skipStep = useSkipStep(journeyId);
+  const journey = useJourney(journeyId, facilityId);
+  const callStep = useCallStep(journeyId, facilityId);
+  const startStep = useStartStep(journeyId, facilityId);
+  const completeStep = useCompleteStep(journeyId, facilityId);
+  const skipStep = useSkipStep(journeyId, facilityId);
 
   if (journey.isLoading) {
     return (
@@ -323,6 +328,7 @@ export default function JourneyDetailPage() {
         <>
           <RoutePatientDialog
             journeyId={journeyId}
+            facilityId={facilityId}
             open={routeOpen}
             onOpenChange={setRouteOpen}
             currentServicePoint={data.current_service_point}
@@ -330,6 +336,7 @@ export default function JourneyDetailPage() {
           />
           <CloseJourneyDialog
             journeyId={journeyId}
+            facilityId={facilityId}
             open={closeOpen}
             onOpenChange={setCloseOpen}
           />

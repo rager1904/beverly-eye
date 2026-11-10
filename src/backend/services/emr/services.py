@@ -33,7 +33,7 @@ class PatientService:
                 if resp.status_code == 200:
                     return resp.json()
         except Exception as e:
-            logger.warning(f"NRC lookup failed for {nrc_number}: {e}")
+            logger.warning("SmartCare NRC lookup failed (%s)", type(e).__name__)
         return None
 
     async def _check_smartcare_duplicate(self, smartcare_id: str) -> bool:
@@ -75,7 +75,6 @@ class PatientService:
             extra={
                 "patient_id": str(patient.id),
                 "hospital_id": str(self.hospital_id),
-                "nrc": data.nrc_number,
             },
         )
         return patient
@@ -143,6 +142,7 @@ class PatientService:
             .values(**update_data)
         )
         await self.db.flush()
+        await self.db.refresh(patient)
         return await self.get_patient(patient_id)
 
     async def soft_delete_patient(self, patient_id: uuid.UUID) -> bool:

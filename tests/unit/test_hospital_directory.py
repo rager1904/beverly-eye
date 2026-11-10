@@ -118,6 +118,7 @@ class StaffServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         service.get_staff = AsyncMock(return_value=staff)
         department_id = uuid.uuid4()
+        db.scalar = AsyncMock(return_value=department_id)
 
         result = await service.update_staff(
             staff.id,
@@ -130,6 +131,17 @@ class StaffServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(staff.last_name, "Mwamba")
         self.assertEqual(staff.updated_by, "admin-1")
         db.flush.assert_awaited_once()
+
+    async def test_create_staff_rejects_unavailable_department(self):
+        db = _db()
+        db.scalar = AsyncMock(return_value=None)
+        service = services.StaffService(db, uuid.uuid4(), "admin-1")
+        data = schemas.StaffCreate(
+            first_name="Jane", last_name="Banda", role="doctor", department_id=uuid.uuid4()
+        )
+        with self.assertRaisesRegex(ValueError, "active department"):
+            await service.create_staff(data)
+        db.flush.assert_not_awaited()
 
     async def test_deactivate_staff_soft_deletes(self):
         db = _db()
@@ -209,3 +221,38 @@ class HospitalIdFallbackTests(unittest.IsolatedAsyncioTestCase):
                 _request(roles=["admin"]), x_hospital_id="not-a-uuid"
             )
         self.assertEqual(excinfo.value.status_code, 400)
+
+class EMRFacilityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_unassigned_platform_admin_uses_directory_default(self):
+        from src.backend.services.emr.dependencies import get_hospital_id
+
+        self.assertEqual(
+            await get_hospital_id(_request(roles=["admin"]), None),
+            dependencies.DEFAULT_HOSPITAL_ID,
+        )
+
+    async def test_staff_without_assignment_has_no_default_facility(self):
+        from src.backend.services.emr.dependencies import get_hospital_id
+
+        self.assertIsNone(await get_hospital_id(_request(roles=["doctor"]), None))
+
+class SelectedFacilityTests(unittest.IsolatedAsyncioTestCase):
+    async def test_only_admin_can_override_facility(self):
+        db = _db()
+        with self.assertRaises(HTTPException) as error:
+            await dependencies.get_selected_facility(_request(roles=["doctor"]), uuid.uuid4(), db)
+        self.assertEqual(error.exception.status_code, 403)
+
+    async def test_admin_cannot_select_unavailable_facility(self):
+        db = _db()
+        db.scalar = AsyncMock(return_value=None)
+        with self.assertRaises(HTTPException) as error:
+            await dependencies.get_selected_facility(_request(roles=["admin"]), uuid.uuid4(), db)
+        self.assertEqual(error.exception.status_code, 404)
+
+    async def test_admin_can_select_active_facility(self):
+        facility_id = uuid.uuid4()
+        db = _db()
+        db.scalar = AsyncMock(return_value=facility_id)
+        result = await dependencies.get_selected_facility(_request(roles=["admin"]), facility_id, db)
+        self.assertEqual(result, facility_id)

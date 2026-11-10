@@ -63,7 +63,12 @@ async def create_hospital(
     db: AsyncSession = Depends(get_db),
 ):
     service = HospitalService(db, user_id=getattr(request.state, "user_id", None))
-    return await service.create_hospital(data)
+    try:
+        return await service.create_hospital(data)
+    except IntegrityError as exc:
+        if getattr(exc.orig, "sqlstate", None) != "23505":
+            raise
+        raise HTTPException(status_code=409, detail="Facility code is already in use") from exc
 
 
 # ─── Departments ───────────────────────────────────────────────────────────────

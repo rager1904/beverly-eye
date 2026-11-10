@@ -75,7 +75,15 @@ class ApiClient {
   private async handleError(response: Response): Promise<Error> {
     try {
       const error = await response.json();
-      return new Error(error.detail || error.message || `Request failed with status ${response.status}`);
+      if (Array.isArray(error.detail)) {
+        const issue = error.detail[0];
+        const field = Array.isArray(issue?.loc) ? issue.loc[issue.loc.length - 1] : undefined;
+        if (typeof field === 'string' && typeof issue?.msg === 'string') {
+          return new Error(`${field.replaceAll('_', ' ')}: ${issue.msg}`);
+        }
+      }
+      const message = typeof error.detail === 'string' ? error.detail : error.message;
+      return new Error(typeof message === 'string' ? message : `Request failed with status ${response.status}`);
     } catch {
       return new Error(`Request failed with status ${response.status}`);
     }

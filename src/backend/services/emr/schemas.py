@@ -445,6 +445,8 @@ class ClinicalNoteCreate(BaseModel):
 
 
 class ClinicalNoteUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     title: Optional[str] = Field(None, max_length=500)
     subjective: Optional[str] = None
     objective: Optional[str] = None

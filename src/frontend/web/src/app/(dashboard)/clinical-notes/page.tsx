@@ -1,7 +1,7 @@
 'use client';
 
 import { api } from '@/lib/api-client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -358,6 +358,10 @@ export default function ClinicalNotesPage() {
   const [noteSpecialty, setNoteSpecialty] = useState<NoteSpecialty>('general');
   const [patientQuery, setPatientQuery] = useState('');
   const [selectedPatient, setSelectedPatient] = useState<PatientSearchResult | null>(null);
+  const [selectedEncounterId, setSelectedEncounterId] = useState<string | null>(null);
+  const [associationLoading, setAssociationLoading] = useState(false);
+  const initialUrlContextHandled = useRef(false);
+  const urlContextRequestId = useRef(0);
   const patientSearch = usePatientSearch(patientQuery);
 
   const [subjective, setSubjective] = useState('');
@@ -387,8 +391,11 @@ export default function ClinicalNotesPage() {
 
   const selectedNote = notes.find((n) => n.id === selectedNoteId);
 
-  const handleSelectNote = (note: ClinicalNote) => {
+  const handleSelectNote = useCallback((note: ClinicalNote) => {
+    urlContextRequestId.current += 1;
+    setAssociationLoading(false);
     setSelectedNoteId(note.id);
+    setSelectedEncounterId(null);
     const titleLower = note.title?.toLowerCase() ?? '';
     setNoteSpecialty(titleLower.includes('dental') ? 'dental' : titleLower.includes('eye') || titleLower.includes('ophthalm') ? 'eye' : 'general');
     setSelectedPatient(null);
@@ -399,12 +406,15 @@ export default function ClinicalNotesPage() {
     setAssessment(note.assessment || '');
     setPlan(note.plan || '');
     setAiSuggestion('');
-  };
+  }, []);
 
   const handleNewNote = () => {
+    urlContextRequestId.current += 1;
+    setAssociationLoading(false);
     setSelectedNoteId(null);
     setNoteSpecialty('general');
     setSelectedPatient(null);
+    setSelectedEncounterId(null);
     setPatientQuery('');
     setTitle('');
     setSubjective('');
@@ -414,8 +424,60 @@ export default function ClinicalNotesPage() {
     setAiSuggestion('');
   };
 
+  useEffect(() => {
+    if (!token || initialUrlContextHandled.current) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const noteId = params.get('note');
+    const encounterId = params.get('encounter');
+    if (!noteId && !encounterId) {
+      initialUrlContextHandled.current = true;
+      return;
+    }
+
+    let active = true;
+    const requestId = ++urlContextRequestId.current;
+    setAssociationLoading(true);
+    void (async () => {
+      try {
+        if (noteId) {
+          const note = await api.get<ClinicalNote>(`/emr/notes/${encodeURIComponent(noteId)}`);
+          if (active && requestId === urlContextRequestId.current) {
+            initialUrlContextHandled.current = true;
+            handleSelectNote(note);
+          }
+          return;
+        }
+
+        // The encounter is the source of truth for the patient association.
+        const encounter = await api.get<{ id: string; patient_id: string }>(`/emr/encounters/${encodeURIComponent(encounterId!)}`);
+        const patient = await api.get<PatientSearchResult>(`/emr/patients/${encodeURIComponent(encounter.patient_id)}`);
+        if (active && requestId === urlContextRequestId.current) {
+          initialUrlContextHandled.current = true;
+          setSelectedPatient(patient);
+          setSelectedEncounterId(encounter.id);
+          setPatientQuery('');
+        }
+      } catch (error) {
+        if (active && requestId === urlContextRequestId.current) {
+          initialUrlContextHandled.current = true;
+          toast.error(error instanceof Error ? error.message : 'Could not load the encounter patient');
+        }
+      } finally {
+        if (active && requestId === urlContextRequestId.current) setAssociationLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [token, handleSelectNote]);
+
   const handleSave = async () => {
-    if (!selectedNoteId && !selectedPatient) {
+    const noteId = selectedNoteId;
+    const patientId = selectedPatient?.id;
+    const encounterId = selectedEncounterId;
+    if (!noteId && !patientId) {
       toast.error('Select a patient before saving a new clinical note');
       return;
     }
@@ -426,25 +488,26 @@ export default function ClinicalNotesPage() {
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
-        note_type: 'SOAP',
         title: title || `${NOTE_TEMPLATES[noteSpecialty].label} SOAP Note`,
         subjective,
         objective,
         assessment,
         plan,
       };
-      if (!selectedNoteId && selectedPatient) {
-        body.patient_id = selectedPatient.id;
+      if (!noteId && patientId) {
+        body.note_type = 'SOAP';
+        body.patient_id = patientId;
+        if (encounterId) body.encounter_id = encounterId;
       }
 
-      if (selectedNoteId) {
-        await api.patch(`/emr/notes/${selectedNoteId}`, body);
+      if (noteId) {
+        await api.patch(`/emr/notes/${noteId}`, body);
       } else {
         await api.post('/emr/notes', body);
       }
-      toast.success(selectedNoteId ? 'Note updated' : 'Note saved');
+      toast.success(noteId ? 'Note updated' : 'Note saved');
       await fetchNotes();
-      if (!selectedNoteId) handleNewNote();
+      if (!noteId) handleNewNote();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to save clinical note');
     } finally {
@@ -502,15 +565,23 @@ export default function ClinicalNotesPage() {
         <CardContent className="grid gap-4 p-4 md:grid-cols-2">
           <div className="space-y-2">
             <label className="text-sm font-medium">Patient {selectedNoteId ? '' : '*'}</label>
-            {selectedPatient ? (
+            {associationLoading ? (
+              <p className="rounded-md border px-3 py-2 text-sm text-muted-foreground">Loading encounter patient…</p>
+            ) : selectedPatient ? (
               <div className="flex min-h-10 items-center justify-between rounded-md border px-3 py-2">
                 <span className="text-sm font-medium">
                   {selectedPatient.first_name} {selectedPatient.last_name}
                   <span className="ml-2 text-xs text-muted-foreground">
                     {selectedPatient.nrc_number || selectedPatient.phone}
                   </span>
+                  {selectedEncounterId && (
+                    <span className="ml-2 text-xs text-muted-foreground">· linked to selected encounter</span>
+                  )}
                 </span>
-                <Button size="sm" variant="ghost" onClick={() => setSelectedPatient(null)}>
+                <Button size="sm" variant="ghost" onClick={() => {
+                  setSelectedPatient(null);
+                  setSelectedEncounterId(null);
+                }}>
                   Change
                 </Button>
               </div>
@@ -661,7 +732,7 @@ export default function ClinicalNotesPage() {
                   <Sparkles className={`h-4 w-4 mr-1 ${aiLoading ? 'animate-spin' : ''}`} />
                   AI Assist
                 </Button>
-                <Button size="sm" onClick={handleSave} disabled={saving}>
+                <Button size="sm" onClick={handleSave} disabled={saving || associationLoading}>
                   {saving ? (
                     <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                   ) : (

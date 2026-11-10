@@ -112,7 +112,8 @@ export default function JoinTelemedicinePage() {
           <Video className="mx-auto h-10 w-10 text-healthcare-green" />
           <h1 className="text-xl font-semibold">Join your video consultation</h1>
           <p className="text-sm text-muted-foreground">
-            Joining shares your camera and microphone with the care provider. The call is not recorded by UbuntuCare.
+            Joining shares your camera and microphone with the care provider. Audio and video are not recorded.
+            Chat messages are temporarily relayed during the call. This private invitation expires after one hour.
             You can mute or turn off video at any time.
           </p>
           <Button onClick={() => setJoined(true)}>Join and enable camera</Button>

@@ -62,7 +62,7 @@ function JourneyDetail() {
   const [routeOpen, setRouteOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
 
-  const journey = useJourney(journeyId, facilityId);
+  const journey = useJourney(journeyId, facilityId, routeOpen || closeOpen);
   const callStep = useCallStep(journeyId, facilityId);
   const startStep = useStartStep(journeyId, facilityId);
   const completeStep = useCompleteStep(journeyId, facilityId);

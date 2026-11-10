@@ -315,3 +315,34 @@ class PatientJourneyServiceTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+def test_latest_handoff_visibility_is_limited_to_its_participants():
+    from sqlalchemy import create_engine, select
+
+    from src.backend.services.patient_flow import models
+
+    hospital_id = uuid.uuid4()
+    journey_id = uuid.uuid4()
+    engine = create_engine("sqlite://")
+    with engine.begin() as conn:
+        conn.exec_driver_sql("CREATE TABLE patient_journeys (id TEXT PRIMARY KEY)")
+        conn.exec_driver_sql(
+            "CREATE TABLE journey_steps (id TEXT, journey_id TEXT, hospital_id TEXT, "
+            "step_number INTEGER, created_by TEXT, provider_id TEXT)"
+        )
+        conn.exec_driver_sql("INSERT INTO patient_journeys VALUES (?)", (journey_id.hex,))
+        conn.exec_driver_sql(
+            "INSERT INTO journey_steps VALUES (?, ?, ?, ?, ?, ?)",
+            [
+                (uuid.uuid4().hex, journey_id.hex, hospital_id.hex, 1, "reception", "nurse"),
+                (uuid.uuid4().hex, journey_id.hex, hospital_id.hex, 2, "nurse", "doctor"),
+            ],
+        )
+
+        for identity, visible in (
+            ("nurse", True), ("doctor", True), ("reception", False), ("other", False), (None, False)
+        ):
+            service = services.JourneyService(None, hospital_id, identity)
+            query = select(models.PatientJourney.id).where(service._latest_handoff_participant())
+            assert (conn.scalar(query) == journey_id) == visible
+    engine.dispose()

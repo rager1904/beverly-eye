@@ -459,7 +459,7 @@ class ClinicalNote(Base, AuditMixin, TenantMixin):
     patient_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("patients.id"), index=True
     )
-    note_type: Mapped[NoteType] = mapped_column(Enum(NoteType))
+    note_type: Mapped[NoteType] = mapped_column(Enum(NoteType, native_enum=False, values_callable=lambda enum: [item.value for item in enum]))
     title: Mapped[Optional[str]] = mapped_column(String(500))
 
     subjective: Mapped[Optional[str]] = mapped_column(Text)
@@ -473,9 +473,11 @@ class ClinicalNote(Base, AuditMixin, TenantMixin):
     authored_by: Mapped[str] = mapped_column(String(200))
     authored_datetime: Mapped[datetime] = mapped_column(DateTime)
     status: Mapped[NoteStatus] = mapped_column(
-        Enum(NoteStatus), default=NoteStatus.draft
+        Enum(NoteStatus, native_enum=False), default=NoteStatus.draft
     )
     is_confidential: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    created_by: Mapped[Optional[str]] = mapped_column("emr_created_by", String(200))
 
     encounter = orm_relationship("Encounter", back_populates="clinical_notes")
     patient = orm_relationship("Patient", back_populates="clinical_notes")

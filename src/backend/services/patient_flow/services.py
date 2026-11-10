@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import case, select
+from sqlalchemy import case, false, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -157,6 +157,46 @@ class JourneyService:
         self.user_id = user_id
         self.user_name = user_name
 
+    def _step_participant(self):
+        if not self.user_id:
+            return false()
+        return or_(
+            models.JourneyStep.created_by == self.user_id,
+            models.JourneyStep.provider_id == self.user_id,
+        )
+
+    def _latest_handoff_participant(self):
+        step = models.JourneyStep
+        latest_step_id = (
+            select(step.id)
+            .where(
+                step.journey_id == models.PatientJourney.id,
+                step.hospital_id == self.hospital_id,
+            )
+            .order_by(step.step_number.desc(), step.id.desc())
+            .limit(1)
+            .correlate(models.PatientJourney)
+            .scalar_subquery()
+        )
+        return (
+            select(step.id)
+            .where(step.id == latest_step_id, self._step_participant())
+            .exists()
+        )
+
+    async def _validate_recipient(self, provider_id: Optional[str]) -> None:
+        if provider_id is None:
+            return
+        recipient = await self.db.scalar(
+            select(Staff.id).where(
+                Staff.hospital_id == self.hospital_id,
+                Staff.is_active.is_(True),
+                Staff.user_id == provider_id,
+            )
+        )
+        if recipient is None:
+            raise ValueError("Choose a recipient with an active staff account at this facility")
+
     # ------------------------------------------------------------------
     # Patient helpers
     # ------------------------------------------------------------------
@@ -172,7 +212,7 @@ class JourneyService:
                 Patient.last_name,
                 Patient.nrc_number,
                 Patient.phone,
-            ).where(Patient.id == patient_id)
+            ).where(Patient.id == patient_id, Patient.hospital_id == self.hospital_id)
         )
         row = result.first()
         if row is None:
@@ -192,6 +232,7 @@ class JourneyService:
     # Journey lifecycle
     # ------------------------------------------------------------------
     async def create_journey(self, data: schemas.JourneyCreate) -> models.PatientJourney:
+        await self._validate_recipient(data.provider_id)
         patient = await self._get_patient_summary(data.patient_id)
         if patient is None:
             raise LookupError("Patient not found")
@@ -273,6 +314,7 @@ class JourneyService:
             .where(
                 models.PatientJourney.id == journey_id,
                 models.PatientJourney.hospital_id == self.hospital_id,
+                self._latest_handoff_participant(),
             )
             .options(selectinload(models.PatientJourney.steps))
         )
@@ -289,6 +331,7 @@ class JourneyService:
             .where(
                 models.PatientJourney.patient_id == patient_id,
                 models.PatientJourney.hospital_id == self.hospital_id,
+                self._latest_handoff_participant(),
             )
             .order_by(models.PatientJourney.checked_in_at.desc())
             .limit(limit)
@@ -313,6 +356,7 @@ class JourneyService:
         ):
             raise ValueError("Cannot route a closed journey")
 
+        await self._validate_recipient(data.provider_id)
         now = datetime.utcnow()
         current = self._find_current_step(journey)
         if current is not None and current.status in ACTIVE_STEP_STATUSES:
@@ -510,8 +554,10 @@ class JourneyService:
                 models.JourneyStep.journey_id == models.PatientJourney.id,
             )
             .join(Patient, models.PatientJourney.patient_id == Patient.id)
+            .where(Patient.hospital_id == self.hospital_id)
             .where(
                 models.JourneyStep.hospital_id == self.hospital_id,
+                self._step_participant(),
                 models.PatientJourney.status.notin_(
                     [
                         schemas.JourneyStatus.completed.value,
@@ -576,6 +622,7 @@ class JourneyService:
         active_result = await self.db.execute(
             select(models.JourneyStep).where(
                 models.JourneyStep.hospital_id == self.hospital_id,
+                self._step_participant(),
                 models.JourneyStep.status.in_(ACTIVE_STEP_STATUSES),
             )
         )
@@ -587,6 +634,7 @@ class JourneyService:
         completed_result = await self.db.execute(
             select(models.JourneyStep).where(
                 models.JourneyStep.hospital_id == self.hospital_id,
+                self._step_participant(),
                 models.JourneyStep.status == schemas.StepStatus.completed.value,
                 models.JourneyStep.completed_at >= start_of_day,
             )
@@ -657,6 +705,7 @@ class JourneyService:
                         Staff.hospital_id == self.hospital_id,
                         Staff.is_active == True,  # noqa: E712
                         Staff.role.in_(DESTINATION_STAFF_ROLES),
+                        Staff.user_id.is_not(None),
                     )
                     .order_by(Staff.last_name, Staff.first_name)
                 )
@@ -695,7 +744,9 @@ class JourneyService:
         journey = await self.get_journey(journey_id)
         if journey is None:
             raise LookupError("Journey not found")
-        self._find_step(journey, step_id)
+        step = self._find_step(journey, step_id)
+        if self._find_current_step(journey) is not step:
+            raise LookupError("Journey step not found")
         return journey
 
     @staticmethod

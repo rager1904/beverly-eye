@@ -133,7 +133,7 @@ export default function RegisterPatientPage() {
             service_point: selectedServicePoint.code,
             department_id: department?.id,
             department_name: department?.name,
-            provider_id: provider?.user_id || provider?.id,
+            provider_id: provider?.user_id ?? undefined,
             provider_name: provider?.name,
             reason: 'Registered at reception',
           });
@@ -411,9 +411,9 @@ export default function RegisterPatientPage() {
                         value={providerId || 'none'}
                         onValueChange={(v) => chooseProvider(v === 'none' ? '' : v)}
                       >
-                        <SelectTrigger><SelectValue placeholder="Any available clinician" /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="Only me" /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">Any available clinician</SelectItem>
+                          <SelectItem value="none">Only me</SelectItem>
                           {staffOptions.map((member) => (
                             <SelectItem key={member.id} value={member.id}>
                               <span className="flex items-center gap-2">

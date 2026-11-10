@@ -49,8 +49,8 @@ export default function PatientFlowPage() {
     [servicePoint, status]
   );
 
-  const queue = useFlowQueue(filters);
-  const stats = useFlowStats();
+  const queue = useFlowQueue(filters, startOpen || !!routeItem);
+  const stats = useFlowStats(startOpen || !!routeItem);
   const { data: destinations } = useFlowDestinations();
 
   const items = useMemo(() => {

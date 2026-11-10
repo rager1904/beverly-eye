@@ -431,27 +431,27 @@ class ClinicalNoteCreate(BaseModel):
     encounter_id: Optional[uuid.UUID] = None
     patient_id: uuid.UUID
     note_type: NoteType
-    title: Optional[str] = None
+    title: Optional[str] = Field(None, max_length=500)
     subjective: Optional[str] = None
     objective: Optional[str] = None
     assessment: Optional[str] = None
     plan: Optional[str] = None
-    procedure_code: Optional[str] = None
-    procedure_description: Optional[str] = None
-    authored_by: str
-    authored_datetime: datetime
+    procedure_code: Optional[str] = Field(None, max_length=20)
+    procedure_description: Optional[str] = Field(None, max_length=500)
+    authored_by: Optional[str] = None
+    authored_datetime: Optional[datetime] = None
     status: NoteStatus = NoteStatus.draft
     is_confidential: bool = False
 
 
 class ClinicalNoteUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = Field(None, max_length=500)
     subjective: Optional[str] = None
     objective: Optional[str] = None
     assessment: Optional[str] = None
     plan: Optional[str] = None
-    procedure_code: Optional[str] = None
-    procedure_description: Optional[str] = None
+    procedure_code: Optional[str] = Field(None, max_length=20)
+    procedure_description: Optional[str] = Field(None, max_length=500)
     status: Optional[NoteStatus] = None
     is_confidential: Optional[bool] = None
 

@@ -146,7 +146,7 @@ def setup_rbac_middleware(app: FastAPI) -> None:
     resource_perms = {
         "/api/v1/emr/patients": "patient:read",
         "/api/v1/emr/encounters": "encounter:read",
-        "/api/v1/emr/notes": "clinical_note:read",
+        "/api/v1/emr/notes": {"GET": "clinical_note:read", "default": "clinical_note:write"},
         "/api/v1/emr/orders": "lab:read",
         "/api/v1/appointments": "appointment:read",
         "/api/v1/lab": "lab:read",

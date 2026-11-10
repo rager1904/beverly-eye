@@ -1,5 +1,6 @@
 'use client';
 
+import { api } from '@/lib/api-client';
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -349,7 +350,6 @@ function formatDate(iso: string) {
 }
 
 export default function ClinicalNotesPage() {
-  const user = useAuthStore((s) => s.user);
   const token = useAuthStore((s) => s.accessToken);
 
   const [notes, setNotes] = useState<ClinicalNote[]>([]);
@@ -372,19 +372,14 @@ export default function ClinicalNotesPage() {
 
   const fetchNotes = useCallback(async () => {
     try {
-      const res = await fetch('/api/v1/emr/notes', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setNotes(data.items || data || []);
-      }
-    } catch {
-      // silently fail — backend may not be available
+      const data = await api.get<{ items: ClinicalNote[] }>('/emr/notes');
+      setNotes(data.items);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Could not load clinical notes');
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     if (token) fetchNotes();
@@ -440,34 +435,18 @@ export default function ClinicalNotesPage() {
       };
       if (!selectedNoteId && selectedPatient) {
         body.patient_id = selectedPatient.id;
-        body.authored_by = user?.name || user?.email || 'Clinical team';
-        body.authored_datetime = new Date().toISOString();
       }
 
-      const url = selectedNoteId
-        ? `/api/v1/emr/notes/${selectedNoteId}`
-        : '/api/v1/emr/notes';
-      const method = selectedNoteId ? 'PATCH' : 'POST';
-
-      const res = await fetch(url, {
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (res.ok) {
-        toast.success(selectedNoteId ? 'Note updated' : 'Note saved');
-        await fetchNotes();
-        if (!selectedNoteId) handleNewNote();
+      if (selectedNoteId) {
+        await api.patch(`/emr/notes/${selectedNoteId}`, body);
       } else {
-        const err = await res.json().catch(() => ({ detail: 'Save failed' }));
-        toast.error(err.detail || 'Failed to save');
+        await api.post('/emr/notes', body);
       }
-    } catch {
-      toast.error('Network error. Check connection.');
+      toast.success(selectedNoteId ? 'Note updated' : 'Note saved');
+      await fetchNotes();
+      if (!selectedNoteId) handleNewNote();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save clinical note');
     } finally {
       setSaving(false);
     }

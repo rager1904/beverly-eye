@@ -13,6 +13,8 @@ import {
   UserRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api-client';
 import { FacilitySelect } from '@/components/FacilitySelect';
 import { useAuthStore } from '@/lib/auth';
 import { Badge } from '@/components/ui/badge';
@@ -96,6 +98,21 @@ export default function DirectoryPage() {
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'admin';
   const [facilityId, setFacilityId] = useState('');
+
+  const currentFacility = useQuery({
+    queryKey: ['directory-current-facility'],
+    queryFn: () => api.get<{ id: string }>('/hospital'),
+    enabled: isAdmin && !facilityId,
+  });
+  const accountFacility = facilityId || currentFacility.data?.id;
+  const staffAccounts = useQuery({
+    queryKey: ['directory-login-accounts'],
+    queryFn: () => api.get<{ id: string; email: string; enabled: boolean; hospital_id: string | null }[]>('/auth/admin/users'),
+    enabled: isAdmin,
+  });
+  const eligibleAccounts = staffAccounts.data?.filter(
+    (account) => account.enabled && accountFacility && account.hospital_id === accountFacility
+  ) ?? [];
 
   const departments = useDepartments(false, facilityId);
   const staff = useStaffDirectory(facilityId);
@@ -198,6 +215,7 @@ export default function DirectoryPage() {
     }
     try {
       const payload = clean(staffForm) as StaffInput;
+      if (editingStaff && !staffForm.user_id) payload.user_id = null;
       if (editingStaff && !staffForm.department_id) {
         payload.department_id = null;
       }
@@ -218,6 +236,7 @@ export default function DirectoryPage() {
   const editStaff = (member: HospitalStaff) => {
     setEditingStaff(member);
     setStaffForm({
+      user_id: member.user_id ?? undefined,
       first_name: member.first_name,
       last_name: member.last_name,
       role: member.role,
@@ -443,6 +462,25 @@ export default function DirectoryPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={submitStaff} className="space-y-3">
+                <div className="space-y-1">
+                  <label htmlFor="staff-login-account" className="text-sm font-medium">Login account</label>
+                  <Select value={staffForm.user_id || 'none'} onValueChange={(value) =>
+                    setStaffForm((prev) => ({ ...prev, user_id: value === 'none' ? undefined : value }))
+                  }>
+                    <SelectTrigger id="staff-login-account"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No linked account</SelectItem>
+                      {staffForm.user_id && !eligibleAccounts.some((account) => account.id === staffForm.user_id) && (
+                        <SelectItem value={staffForm.user_id}>Current linked account</SelectItem>
+                      )}
+                      {eligibleAccounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>{account.email || account.id}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Link a login assigned to this facility so this staff member can receive patient handoffs.</p>
+                  {staffAccounts.isError && <p role="alert" className="text-sm text-destructive">Could not load login accounts.</p>}
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1">
                     <label className="text-sm font-medium">First name *</label>

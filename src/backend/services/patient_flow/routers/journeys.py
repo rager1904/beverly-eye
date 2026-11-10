@@ -4,32 +4,28 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from src.backend.services.emr.dependencies import EMRSession, get_emr_session
+from src.backend.services.hospital_management.dependencies import _is_platform_admin
 from src.backend.services.patient_flow import schemas
 from src.backend.services.patient_flow.services import JourneyService
 
 router = APIRouter()
 
 
-async def require_flow_write(request: Request) -> None:
-    """Require patient_flow:write for mutations.
-
-    Empty permission sets are treated as trusted service-to-service calls,
-    matching the existing RBAC middleware behaviour.
-    """
+def get_flow_service(
+    request: Request,
+    session: EMRSession = Depends(get_emr_session),
+) -> JourneyService:
+    claims = getattr(request.state, "token_claims", {})
+    user_id = claims.get("sub")
+    if not isinstance(user_id, str) or not user_id:
+        raise HTTPException(status_code=401, detail="Authenticated staff account required")
+    if not claims.get("hospital_id") and not _is_platform_admin(request):
+        raise HTTPException(status_code=403, detail="Facility assignment required")
     permissions = getattr(request.state, "permissions", None)
-    if permissions is None or not permissions.resources:
-        return
-    if not permissions.has_permission("patient_flow:write"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Missing required permission: patient_flow:write",
-        )
-
-
-def _service(session: EMRSession) -> JourneyService:
-    return JourneyService(
-        session.db, session.hospital_id, session.user_id, session.user_name
-    )
+    permission = "patient_flow:read" if request.method == "GET" else "patient_flow:write"
+    if permissions is None or not permissions.has_permission(permission):
+        raise HTTPException(status_code=403, detail="Patient flow permission required")
+    return JourneyService(session.db, session.hospital_id, user_id, session.user_name)
 
 
 def _not_found(detail: str) -> HTTPException:
@@ -47,22 +43,21 @@ def _conflict(detail: str) -> HTTPException:
 )
 async def start_journey(
     data: schemas.JourneyCreate,
-    _: None = Depends(require_flow_write),
-    session: EMRSession = Depends(get_emr_session),
+    service: JourneyService = Depends(get_flow_service),
 ):
     """Register a patient arrival and queue them at the first service point."""
-    service = _service(session)
     try:
         return await service.create_journey(data)
     except LookupError as exc:
         raise _not_found(str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/journeys/{journey_id}", response_model=schemas.JourneyDetailResponse)
 async def get_journey(
-    journey_id: uuid.UUID, session: EMRSession = Depends(get_emr_session)
+    journey_id: uuid.UUID, service: JourneyService = Depends(get_flow_service)
 ):
-    service = _service(session)
     journey = await service.get_journey(journey_id)
     if journey is None:
         raise _not_found("Journey not found")
@@ -72,15 +67,13 @@ async def get_journey(
 @router.post(
     "/journeys/{journey_id}/route",
     response_model=schemas.JourneyDetailResponse,
-    dependencies=[Depends(require_flow_write)],
 )
 async def route_patient(
     journey_id: uuid.UUID,
     data: schemas.RouteRequest,
-    session: EMRSession = Depends(get_emr_session),
+    service: JourneyService = Depends(get_flow_service),
 ):
     """Refer/send a patient to a doctor, counter, nurse or service point."""
-    service = _service(session)
     try:
         return await service.route_patient(journey_id, data)
     except LookupError as exc:
@@ -92,14 +85,12 @@ async def route_patient(
 @router.post(
     "/journeys/{journey_id}/steps/{step_id}/call",
     response_model=schemas.JourneyDetailResponse,
-    dependencies=[Depends(require_flow_write)],
 )
 async def call_step(
     journey_id: uuid.UUID,
     step_id: uuid.UUID,
-    session: EMRSession = Depends(get_emr_session),
+    service: JourneyService = Depends(get_flow_service),
 ):
-    service = _service(session)
     try:
         return await service.call_step(journey_id, step_id)
     except LookupError as exc:
@@ -111,14 +102,12 @@ async def call_step(
 @router.post(
     "/journeys/{journey_id}/steps/{step_id}/start",
     response_model=schemas.JourneyDetailResponse,
-    dependencies=[Depends(require_flow_write)],
 )
 async def start_step(
     journey_id: uuid.UUID,
     step_id: uuid.UUID,
-    session: EMRSession = Depends(get_emr_session),
+    service: JourneyService = Depends(get_flow_service),
 ):
-    service = _service(session)
     try:
         return await service.start_step(journey_id, step_id)
     except LookupError as exc:
@@ -130,15 +119,13 @@ async def start_step(
 @router.post(
     "/journeys/{journey_id}/steps/{step_id}/complete",
     response_model=schemas.JourneyDetailResponse,
-    dependencies=[Depends(require_flow_write)],
 )
 async def complete_step(
     journey_id: uuid.UUID,
     step_id: uuid.UUID,
     data: schemas.CompleteStepRequest,
-    session: EMRSession = Depends(get_emr_session),
+    service: JourneyService = Depends(get_flow_service),
 ):
-    service = _service(session)
     try:
         return await service.complete_step(journey_id, step_id, data)
     except LookupError as exc:
@@ -150,15 +137,13 @@ async def complete_step(
 @router.post(
     "/journeys/{journey_id}/steps/{step_id}/skip",
     response_model=schemas.JourneyDetailResponse,
-    dependencies=[Depends(require_flow_write)],
 )
 async def skip_step(
     journey_id: uuid.UUID,
     step_id: uuid.UUID,
     data: schemas.SkipStepRequest,
-    session: EMRSession = Depends(get_emr_session),
+    service: JourneyService = Depends(get_flow_service),
 ):
-    service = _service(session)
     try:
         return await service.skip_step(journey_id, step_id, data)
     except LookupError as exc:
@@ -170,14 +155,12 @@ async def skip_step(
 @router.post(
     "/journeys/{journey_id}/close",
     response_model=schemas.JourneyDetailResponse,
-    dependencies=[Depends(require_flow_write)],
 )
 async def close_journey(
     journey_id: uuid.UUID,
     data: schemas.CloseJourneyRequest,
-    session: EMRSession = Depends(get_emr_session),
+    service: JourneyService = Depends(get_flow_service),
 ):
-    service = _service(session)
     try:
         return await service.close_journey(journey_id, data)
     except LookupError as exc:
@@ -191,9 +174,8 @@ async def close_journey(
 async def get_patient_journeys(
     patient_id: uuid.UUID,
     limit: int = Query(20, ge=1, le=100),
-    session: EMRSession = Depends(get_emr_session),
+    service: JourneyService = Depends(get_flow_service),
 ):
-    service = _service(session)
     return await service.get_patient_journeys(patient_id, limit)
 
 
@@ -205,9 +187,8 @@ async def get_queue(
     step_type: Optional[schemas.StepType] = Query(None),
     status: Optional[schemas.StepStatus] = Query(None),
     include_completed: bool = Query(False),
-    session: EMRSession = Depends(get_emr_session),
+    service: JourneyService = Depends(get_flow_service),
 ):
-    service = _service(session)
     return await service.get_queue(
         service_point=service_point,
         department_id=department_id,
@@ -219,10 +200,10 @@ async def get_queue(
 
 
 @router.get("/stats", response_model=schemas.FlowStatsResponse)
-async def get_stats(session: EMRSession = Depends(get_emr_session)):
-    return await _service(session).get_stats()
+async def get_stats(service: JourneyService = Depends(get_flow_service)):
+    return await service.get_stats()
 
 
 @router.get("/destinations", response_model=schemas.DestinationsResponse)
-async def get_destinations(session: EMRSession = Depends(get_emr_session)):
-    return await _service(session).get_destinations()
+async def get_destinations(service: JourneyService = Depends(get_flow_service)):
+    return await service.get_destinations()

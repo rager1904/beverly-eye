@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { withFacility } from '@/lib/facility-scope';
+import { useAuthStore } from '@/lib/auth';
 import { clinicalApi } from '@/lib/clinical-api';
 import type {
   FlowDestinations,
@@ -89,51 +90,64 @@ function invalidateFlow(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: flowKeys.all });
 }
 
-export function useFlowQueue(filters: FlowQueueFilters = {}) {
+export function useFlowQueue(filters: FlowQueueFilters = {}, pauseRefresh = false) {
   const params = new URLSearchParams();
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== undefined && value !== '') params.set(key, String(value));
   });
   const query = params.toString();
 
+  const userId = useAuthStore((state) => state.user?.id);
   return useQuery<FlowQueueResponse>({
-    queryKey: flowKeys.queue(filters),
+    queryKey: [...flowKeys.queue(filters), userId],
+    enabled: !!userId,
     queryFn: () => clinicalApi<FlowQueueResponse>(`patient-flow/queue${query ? `?${query}` : ''}`),
-    refetchInterval: 15000,
+    refetchInterval: pauseRefresh ? false : 15000,
+    refetchOnWindowFocus: !pauseRefresh,
+    refetchOnReconnect: !pauseRefresh,
   });
 }
 
-export function useFlowStats() {
+export function useFlowStats(pauseRefresh = false) {
+  const userId = useAuthStore((state) => state.user?.id);
   return useQuery<FlowStats>({
-    queryKey: flowKeys.stats(),
+    queryKey: [...flowKeys.stats(), userId],
+    enabled: !!userId,
     queryFn: () => clinicalApi<FlowStats>('patient-flow/stats'),
-    refetchInterval: 15000,
+    refetchInterval: pauseRefresh ? false : 15000,
+    refetchOnWindowFocus: !pauseRefresh,
+    refetchOnReconnect: !pauseRefresh,
   });
 }
 
 export function useFlowDestinations(facilityId?: string, enabled = true) {
+  const userId = useAuthStore((state) => state.user?.id);
   return useQuery<FlowDestinations>({
-    queryKey: [...flowKeys.destinations(), facilityId],
-    enabled,
+    queryKey: [...flowKeys.destinations(), facilityId, userId],
+    enabled: enabled && !!userId,
     queryFn: () => clinicalApi<FlowDestinations>(withFacility('patient-flow/destinations', facilityId)),
     staleTime: 60000,
   });
 }
 
-export function useJourney(journeyId: string, facilityId?: string) {
+export function useJourney(journeyId: string, facilityId?: string, pauseRefresh = false) {
+  const userId = useAuthStore((state) => state.user?.id);
   return useQuery<PatientJourney>({
-    queryKey: [...flowKeys.journey(journeyId), facilityId],
+    queryKey: [...flowKeys.journey(journeyId), facilityId, userId],
     queryFn: () => clinicalApi<PatientJourney>(withFacility(`patient-flow/journeys/${journeyId}`, facilityId)),
-    enabled: !!journeyId,
-    refetchInterval: 15000,
+    enabled: !!userId && !!journeyId,
+    refetchInterval: pauseRefresh ? false : 15000,
+    refetchOnWindowFocus: !pauseRefresh,
+    refetchOnReconnect: !pauseRefresh,
   });
 }
 
 export function usePatientJourneys(patientId: string) {
+  const userId = useAuthStore((state) => state.user?.id);
   return useQuery<PatientJourney[]>({
-    queryKey: flowKeys.patientJourneys(patientId),
+    queryKey: [...flowKeys.patientJourneys(patientId), userId],
     queryFn: () => clinicalApi<PatientJourney[]>(`patient-flow/patients/${patientId}/journeys`),
-    enabled: !!patientId,
+    enabled: !!userId && !!patientId,
   });
 }
 

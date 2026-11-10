@@ -17,7 +17,10 @@ router = APIRouter()
 @router.post("", response_model=ClinicalNoteResponse, status_code=status.HTTP_201_CREATED)
 async def create_note(data: ClinicalNoteCreate, session: EMRSession = Depends(get_emr_session)):
     service = ClinicalNoteService(session.db, session.hospital_id, session.user_id, session.user_name)
-    return await service.create_note(data)
+    try:
+        return await service.create_note(data)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/{note_id}", response_model=ClinicalNoteResponse)
@@ -65,7 +68,10 @@ async def update_note(note_id: uuid.UUID, data: ClinicalNoteUpdate, session: EMR
 @router.post("/{note_id}/finalize", response_model=ClinicalNoteResponse)
 async def finalize_note(note_id: uuid.UUID, session: EMRSession = Depends(get_emr_session)):
     service = ClinicalNoteService(session.db, session.hospital_id, session.user_id, session.user_name)
-    note = await service.finalize_note(note_id)
+    try:
+        note = await service.finalize_note(note_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not note:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Clinical note not found")
     return note

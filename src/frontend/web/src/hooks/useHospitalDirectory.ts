@@ -19,7 +19,7 @@ export interface DepartmentInput {
 }
 
 export interface StaffInput {
-  user_id?: string;
+  user_id?: string | null;
   first_name: string;
   last_name: string;
   role: HospitalStaffRole;

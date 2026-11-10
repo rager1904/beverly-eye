@@ -143,7 +143,7 @@ export function StartJourneyDialog({ open, onOpenChange }: StartJourneyDialogPro
         service_point: selectedServicePoint?.code ?? servicePoint,
         department_id: department?.id,
         department_name: department?.name,
-        provider_id: provider?.user_id || provider?.id,
+        provider_id: provider?.user_id ?? undefined,
         provider_name: provider?.name,
         reason: reason || undefined,
       });
@@ -351,10 +351,10 @@ export function StartJourneyDialog({ open, onOpenChange }: StartJourneyDialogPro
               <label className="text-sm font-medium">Doctor / nurse</label>
               <Select value={providerId || 'none'} onValueChange={(value) => chooseProvider(value === 'none' ? '' : value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Any available clinician" />
+                  <SelectValue placeholder="Only me" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Any available clinician</SelectItem>
+                  <SelectItem value="none">Only me</SelectItem>
                   {staffOptions.map((member) => (
                     <SelectItem key={member.id} value={member.id}>
                       <span className="flex items-center gap-2">

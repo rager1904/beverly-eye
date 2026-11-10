@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import httpx
@@ -415,10 +415,31 @@ class ClinicalNoteService:
         self.user_name = user_name
 
     async def create_note(self, data: schemas.ClinicalNoteCreate) -> models.ClinicalNote:
+        patient_id = await self.db.scalar(
+            select(models.Patient.id).where(
+                models.Patient.id == data.patient_id,
+                models.Patient.hospital_id == self.hospital_id,
+                models.Patient.is_active.is_(True),
+            )
+        )
+        if patient_id is None:
+            raise LookupError("Patient not found at this facility")
+        if data.encounter_id is not None:
+            encounter_id = await self.db.scalar(
+                select(models.Encounter.id).where(
+                    models.Encounter.id == data.encounter_id,
+                    models.Encounter.patient_id == patient_id,
+                    models.Encounter.hospital_id == self.hospital_id,
+                )
+            )
+            if encounter_id is None:
+                raise LookupError("Encounter not found for this patient")
         note = models.ClinicalNote(
             hospital_id=self.hospital_id,
             created_by=self.user_id,
-            **data.model_dump(),
+            authored_by=(self.user_name or self.user_id or "Clinical team")[:200],
+            authored_datetime=datetime.now(timezone.utc).replace(tzinfo=None),
+            **data.model_dump(exclude={"authored_by", "authored_datetime"}),
         )
         self.db.add(note)
         await self.db.flush()
@@ -474,14 +495,14 @@ class ClinicalNoteService:
         update_data = data.model_dump(exclude_unset=True)
         if not update_data:
             return note
-        update_data["updated_by"] = self.user_id
-        await self.db.execute(
-            update(models.ClinicalNote)
-            .where(models.ClinicalNote.id == note_id)
-            .values(**update_data)
-        )
+        for field, value in update_data.items():
+            if field in ("status", "is_confidential") and value is None:
+                raise ValueError(f"{field} cannot be null")
+            setattr(note, field, value)
+        note.updated_by = self.user_id
         await self.db.flush()
-        return await self.get_note(note_id)
+        await self.db.refresh(note)
+        return note
 
     async def finalize_note(self, note_id: uuid.UUID) -> Optional[models.ClinicalNote]:
         return await self.update_note(

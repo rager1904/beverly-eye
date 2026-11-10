@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Send, Stethoscope } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -57,8 +57,14 @@ export function RoutePatientDialog({
   const { data: destinations } = useFlowDestinations(facilityId);
   const routePatient = useRoutePatient(journeyId, facilityId);
 
+  const draftInitialized = useRef(false);
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      draftInitialized.current = false;
+      return;
+    }
+    if (draftInitialized.current) return;
+    draftInitialized.current = true;
     // Onward referral defaults to the next logical desk: a consultation room
     // returns to the lab/pharmacy, while every other point returns to a doctor.
     setServicePoint(currentServicePoint === 'consultation' ? 'laboratory' : 'consultation');
@@ -96,7 +102,7 @@ export function RoutePatientDialog({
         service_point: selectedServicePoint?.code ?? servicePoint,
         department_id: department?.id,
         department_name: department?.name,
-        provider_id: provider?.user_id || provider?.id,
+        provider_id: provider?.user_id ?? undefined,
         provider_name: provider?.name,
         priority: priority === 'keep' ? undefined : priority,
         reason: reason || undefined,
@@ -169,10 +175,10 @@ export function RoutePatientDialog({
               <label className="text-sm font-medium">Doctor / nurse</label>
               <Select value={providerId || 'none'} onValueChange={(value) => chooseProvider(value === 'none' ? '' : value)}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Any available clinician" />
+                  <SelectValue placeholder="Only me" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="none">Any available clinician</SelectItem>
+                  <SelectItem value="none">Only me</SelectItem>
                   {staffOptions.map((member) => (
                     <SelectItem key={member.id} value={member.id}>
                       <span className="flex items-center gap-2">

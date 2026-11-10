@@ -59,6 +59,13 @@ def _redis(request: Request):
     return client
 
 
+async def _ice_servers_for_call(consultation_id: uuid.UUID) -> list[dict]:
+    try:
+        return await ice_server_config(str(consultation_id))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 def _signal_queue(consultation_id: uuid.UUID, recipient_role: str) -> str:
     return f"telemedicine:signals:{consultation_id}:{recipient_role}"
 
@@ -122,7 +129,7 @@ async def create_consultation(
     return {
         "consultation": consultation,
         "invite_token": invite_token,
-        "ice_servers": ice_server_config(str(consultation.id)),
+        "ice_servers": await _ice_servers_for_call(consultation.id),
     }
 
 
@@ -261,7 +268,7 @@ async def get_ice_servers(
     if not consultation:
         raise HTTPException(status_code=404, detail="Consultation not found")
     _require_provider(session, consultation)
-    return {"ice_servers": ice_server_config(str(consultation_id))}
+    return {"ice_servers": await _ice_servers_for_call(consultation_id)}
 
 
 @router.get("/consultations/{consultation_id}/signals", response_model=SignalBatch)
@@ -317,7 +324,7 @@ async def join_by_invite(
         "consultation_id": consultation.id,
         "status": consultation.status,
         "consultation_type": consultation.consultation_type,
-        "ice_servers": ice_server_config(str(consultation.id)),
+        "ice_servers": await _ice_servers_for_call(consultation.id),
     }
 
 

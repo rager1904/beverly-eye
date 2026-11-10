@@ -153,9 +153,13 @@ POST /api/v1/telemedicine/invites/{id}/signals
 ```
 
 Signal messages are held temporarily in Redis and expire. STUN is configured
-by default; a coturn-compatible TURN service is needed for reliable calls on
-networks that block peer-to-peer connections. Configure `WEBRTC_TURN_URL` and
-`WEBRTC_TURN_SECRET` on the backend to enable short-lived TURN credentials.
+by default; a TURN relay is needed for reliable calls on networks that block
+peer-to-peer connections. The recommended low-operations option is Cloudflare
+Realtime TURN: set `CLOUDFLARE_TURN_KEY_ID` and `CLOUDFLARE_TURN_API_TOKEN` on
+the backend. The API token stays server-side and the backend returns
+short-lived ICE credentials. A coturn-compatible relay can instead use
+`WEBRTC_TURN_URL` and `WEBRTC_TURN_SECRET`. Review the provider's
+data-processing terms before relaying real patient consultations.
 
 ---
 

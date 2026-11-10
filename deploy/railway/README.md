@@ -171,10 +171,17 @@ approval.
   invite links. Session signaling is held temporarily in Redis; video/audio
   media is peer-to-peer and is not recorded by default.
 - STUN is configured by default. For calls across restrictive NATs/firewalls,
-  provide a publicly reachable coturn-compatible TURN service and set
-  `WEBRTC_TURN_URL` plus `WEBRTC_TURN_SECRET` on `backend`. The secret must
-  match coturn's `static-auth-secret`; UbuntuCare derives short-lived client
-  credentials and never sends the shared secret to browsers.
+  the recommended low-operations option is Cloudflare Realtime TURN. Create a
+  TURN key and a scoped API token (Calls Write), then set
+  `CLOUDFLARE_TURN_KEY_ID` and `CLOUDFLARE_TURN_API_TOKEN` on `backend`.
+  UbuntuCare requests one-hour ICE credentials server-side; the long-lived API
+  token never reaches browsers. Cloudflare currently advertises 1 TB of TURN
+  egress included, then $0.05/GB; confirm current pricing in the Cloudflare
+  account before enabling it. Review Cloudflare's data-processing terms before
+  using TURN for real patient consultations.
+- A self-hosted coturn server using REST authentication is also supported via
+  `WEBRTC_TURN_URL` and `WEBRTC_TURN_SECRET`; the secret must match coturn's
+  `static-auth-secret`.
 - Do not enable recording until consent, retention, and storage policies are
   configured and verified.
 

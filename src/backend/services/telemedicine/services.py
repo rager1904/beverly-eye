@@ -2,12 +2,14 @@ import base64
 import hashlib
 import hmac
 import logging
+import re
 import secrets
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import httpx
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,10 +27,57 @@ def _utc_now_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def ice_server_config(room_id: str | None = None) -> list[dict]:
+async def ice_server_config(room_id: str | None = None) -> list[dict]:
+    cloudflare_configured = bool(
+        settings.cloudflare_turn_key_id or settings.cloudflare_turn_api_token
+    )
+    if cloudflare_configured:
+        if not settings.cloudflare_turn_key_id or not settings.cloudflare_turn_api_token:
+            raise RuntimeError("Both CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN are required")
+        endpoint = (
+            "https://rtc.live.cloudflare.com/v1/turn/keys/"
+            f"{settings.cloudflare_turn_key_id}/credentials/generate-ice-servers"
+        )
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(5.0, connect=2.0)) as client:
+                response = await client.post(
+                    endpoint,
+                    headers={"Authorization": f"Bearer {settings.cloudflare_turn_api_token}"},
+                    json={"ttl": int(INVITE_TTL.total_seconds())},
+                )
+            response.raise_for_status()
+            servers = response.json().get("iceServers")
+            if not isinstance(servers, list) or not servers:
+                raise ValueError("TURN credential response did not contain ICE servers")
+            # Port 53 is blocked by many browsers and networks. Keep Cloudflare's
+            # standard UDP/TCP/TLS alternatives for restrictive environments.
+            cleaned = []
+            for server in servers:
+                if not isinstance(server, dict):
+                    continue
+                urls = server.get("urls", [])
+                urls = [urls] if isinstance(urls, str) else urls
+                if not isinstance(urls, list):
+                    continue
+                urls = [
+                    url for url in urls
+                    if isinstance(url, str) and not re.search(r":53(?=[:/?]|$)", url)
+                ]
+                if urls:
+                    cleaned.append({**server, "urls": urls})
+            if not cleaned:
+                raise ValueError("TURN credential response contained no browser-compatible ICE URLs")
+            return cleaned
+        except (httpx.HTTPError, ValueError, TypeError) as exc:
+            logger.warning("Unable to obtain temporary TURN credentials (%s)", type(exc).__name__)
+            raise RuntimeError("The video relay service is unavailable. Please try again shortly.") from exc
+
+    turn_urls = [url.strip() for url in settings.webrtc_turn_url.split(",") if url.strip()]
+    if bool(turn_urls) != bool(settings.webrtc_turn_secret):
+        raise RuntimeError("Both WEBRTC_TURN_URL and WEBRTC_TURN_SECRET are required for coturn")
+
     stun_urls = [url.strip() for url in settings.webrtc_stun_servers.split(",") if url.strip()]
     servers: list[dict] = [{"urls": stun_urls}] if stun_urls else []
-    turn_urls = [url.strip() for url in settings.webrtc_turn_url.split(",") if url.strip()]
     if turn_urls and settings.webrtc_turn_secret:
         username = f"{int(time.time()) + int(INVITE_TTL.total_seconds())}:{room_id or 'ubuntucare'}"
         credential = base64.b64encode(

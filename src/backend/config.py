@@ -60,6 +60,8 @@ class Settings(BaseSettings):
     # The backend derives short-lived client credentials; never put the secret
     # itself in an ICE configuration returned to browsers.
     webrtc_turn_secret: str = ""
+    cloudflare_turn_key_id: str = ""
+    cloudflare_turn_api_token: str = ""
 
     telemetry_enabled: bool = True
     otlp_endpoint: str = ""

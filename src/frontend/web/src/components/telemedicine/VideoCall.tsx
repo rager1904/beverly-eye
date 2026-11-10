@@ -245,7 +245,13 @@ export function VideoCall({
         if (disposed) return;
         setConnectionState(peer.connectionState);
         if (peer.connectionState === 'failed') {
-          setError('The video connection failed. Your network may require a TURN relay; ask your administrator to configure one.');
+          const turnConfigured = iceServers?.some((server) => {
+            const urls = Array.isArray(server.urls) ? server.urls : [server.urls];
+            return urls.some((url) => url.startsWith('turn:') || url.startsWith('turns:'));
+          });
+          setError(turnConfigured
+            ? 'The video relay could not connect. Check the TURN provider and try again.'
+            : 'This call has no TURN relay configured. Direct video works on many networks, but a relay is required on restrictive networks.');
         } else if (peer.connectionState === 'connected') {
           setError('');
         }

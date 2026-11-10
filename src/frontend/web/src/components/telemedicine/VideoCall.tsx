@@ -114,7 +114,11 @@ export function VideoCall({
     type: SignalEnvelope['type'],
     payload: Record<string, unknown> = {},
   ) => {
-    await api.post(signalEndpoint, { type, payload }, apiConfig());
+    const config = apiConfig();
+    await api.post(signalEndpoint, { type, payload }, {
+      ...config,
+      headers: { ...config.headers, 'Content-Type': 'application/json' },
+    });
   }, [apiConfig, signalEndpoint]);
 
   const acceptCandidate = useCallback(async (candidate: RTCIceCandidateInit) => {

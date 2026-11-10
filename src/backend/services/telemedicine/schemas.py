@@ -9,7 +9,7 @@ from .models import ConsultationStatus, ConsultationType, PrescriptionStatus, Re
 
 class ConsultationCreate(BaseModel):
     patient_id: uuid.UUID
-    provider_id: uuid.UUID
+    provider_id: Optional[uuid.UUID] = None
     appointment_id: Optional[uuid.UUID] = None
     consultation_type: ConsultationType
     scheduled_start: Optional[datetime] = None
@@ -38,6 +38,41 @@ class ConsultationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ConsultationCreatedResponse(BaseModel):
+    consultation: ConsultationResponse
+    invite_token: str
+    ice_servers: list[dict]
+
+
+class InviteJoinResponse(BaseModel):
+    consultation_id: uuid.UUID
+    status: ConsultationStatus
+    consultation_type: ConsultationType
+    ice_servers: list[dict]
+
+
+class SignalCreate(BaseModel):
+    type: str = Field(..., pattern="^(offer|answer|ice_candidate|chat|hangup)$")
+    payload: dict
+
+
+class SignalEnvelope(BaseModel):
+    type: str
+    sender_role: str
+    payload: dict
+    sent_at: datetime
+
+
+class SignalBatch(BaseModel):
+    items: list[SignalEnvelope]
+    next_cursor: int
+
+
+class InviteTokenResponse(BaseModel):
+    invite_token: str
+    expires_at: datetime
+
+
 class ConsultationComplete(BaseModel):
     diagnosis: Optional[str] = None
     treatment_plan: Optional[str] = None
@@ -54,19 +89,10 @@ class WaitingRoomResponse(BaseModel):
     consultation_id: uuid.UUID
     patient_joined_at: Optional[datetime] = None
     provider_joined_at: Optional[datetime] = None
-    session_token: Optional[str] = None
     room_sid: Optional[str] = None
     is_active: bool
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class TokenResponse(BaseModel):
-    room_sid: str
-    token_type: str = "temporary"
-    expires_in: int = 3600
-    identity_patient: str
-    identity_provider: str
 
 
 class RecordingCreate(BaseModel):
@@ -128,13 +154,3 @@ class PrescriptionResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class SignalMessage(BaseModel):
-    type: str = Field(..., pattern="^(offer|answer|ice_candidate)$")
-    room: str
-    identity: str
-    sdp: Optional[str] = None
-    candidate: Optional[str] = None
-    sdpMid: Optional[str] = None
-    sdpMLineIndex: Optional[int] = None

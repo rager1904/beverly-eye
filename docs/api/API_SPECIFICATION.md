@@ -129,17 +129,33 @@ Server → Client:
 
 ### Telemedicine Video
 
-```
-WS /api/v1/ws/telemedicine/{consultation_id}
+Telemedicine signaling uses short REST polls so it works through the public
+frontend-to-private-backend proxy. Media itself is peer-to-peer WebRTC; it is
+not recorded by default.
 
-Events:
-- peer_joined / peer_left
-- ice_candidate
-- sdp_offer / sdp_answer
-- chat_message
-- screen_share
-- recording_status
+```text
+POST /api/v1/telemedicine/consultations
+  Staff-only. Creates a consultation and returns a one-hour patient invite token.
+
+POST /api/v1/telemedicine/consultations/{id}/start
+  Staff-only. Starts or resumes the provider side of the consultation.
+
+GET  /api/v1/telemedicine/consultations/{id}/signals?cursor=0
+POST /api/v1/telemedicine/consultations/{id}/signals
+  Provider-side SDP, ICE, chat, and hangup signaling.
+
+POST /api/v1/telemedicine/invites/{id}/join
+GET  /api/v1/telemedicine/invites/{id}/signals?cursor=0
+POST /api/v1/telemedicine/invites/{id}/signals
+  Patient-side endpoints. Require X-Call-Invite-Token; the token is sent in a
+  header, not in the URL. Invite links carry it in the URL fragment so it is
+  not sent in HTTP requests or referrers.
 ```
+
+Signal messages are held temporarily in Redis and expire. STUN is configured
+by default; a coturn-compatible TURN service is needed for reliable calls on
+networks that block peer-to-peer connections. Configure `WEBRTC_TURN_URL` and
+`WEBRTC_TURN_SECRET` on the backend to enable short-lived TURN credentials.
 
 ---
 

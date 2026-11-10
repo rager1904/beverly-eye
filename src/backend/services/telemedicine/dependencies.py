@@ -23,13 +23,17 @@ class TelemedSession:
         hospital_id: Optional[uuid.UUID] = Depends(get_telemed_hospital_id),
         user_id: Optional[str] = Header(None, alias="X-User-Id"),
         user_name: Optional[str] = Header(None, alias="X-User-Name"),
+        user_roles: Optional[str] = Header(None, alias="X-User-Roles"),
     ):
         self.db = db
         self.hospital_id = hospital_id
         self.user_id = user_id
         self.user_name = user_name
+        self.user_roles = {role.strip() for role in (user_roles or "").split(",") if role.strip()}
 
     async def verify_hospital(self) -> None:
+        if not self.user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authenticated user identity is required")
         if not self.hospital_id:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="X-Hospital-Id header is required")
 

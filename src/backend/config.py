@@ -54,6 +54,13 @@ class Settings(BaseSettings):
     keycloak_client_id: str = "api-gateway"
     keycloak_client_secret: str = ""
 
+    webrtc_stun_servers: str = "stun:stun.l.google.com:19302,stun:stun1.l.google.com:19302"
+    webrtc_turn_url: str = ""
+    # Shared secret for a coturn server configured with use-auth-secret.
+    # The backend derives short-lived client credentials; never put the secret
+    # itself in an ICE configuration returned to browsers.
+    webrtc_turn_secret: str = ""
+
     telemetry_enabled: bool = True
     otlp_endpoint: str = ""
 

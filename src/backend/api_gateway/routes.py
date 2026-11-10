@@ -137,6 +137,25 @@ async def proxy_request(service: str, path: str, request: Request) -> Response:
     headers.pop("host", None)
     headers.pop("content-length", None)
 
+    # Never trust identity headers supplied by the browser. Forward these only
+    # from the JWT already validated by AuthenticationMiddleware.
+    for identity_header in ("x-user-id", "x-user-name", "x-user-roles", "x-hospital-id"):
+        headers.pop(identity_header, None)
+    user = getattr(request.state, "user", None)
+    if user:
+        if user_id := user.get("sub"):
+            headers["X-User-Id"] = str(user_id)
+        if user_name := (user.get("name") or user.get("preferred_username") or user.get("email")):
+            headers["X-User-Name"] = str(user_name)
+        roles = user.get("realm_access", {}).get("roles", [])
+        if roles:
+            headers["X-User-Roles"] = ",".join(str(role) for role in roles)
+        hospital_id = user.get("hospital_id")
+        if isinstance(hospital_id, list):
+            hospital_id = hospital_id[0] if hospital_id else None
+        if hospital_id:
+            headers["X-Hospital-Id"] = str(hospital_id)
+
     try:
         response = await client.request(
             method=request.method,

@@ -34,6 +34,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/api/v1/auth/forgot-password",
             "/api/v1/auth/reset-password",
             "/api/v1/appointments",
+            "/api/v1/telemedicine/invites/",
         ]
         self.exclude_paths = exclude_paths or []
 

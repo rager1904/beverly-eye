@@ -165,6 +165,19 @@ approval.
   overwrite an existing user's password, so password changes made in Keycloak
   are preserved.
 
+## Telemedicine video
+
+- Signaling uses authenticated gateway APIs and short-lived, one-hour patient
+  invite links. Session signaling is held temporarily in Redis; video/audio
+  media is peer-to-peer and is not recorded by default.
+- STUN is configured by default. For calls across restrictive NATs/firewalls,
+  provide a publicly reachable coturn-compatible TURN service and set
+  `WEBRTC_TURN_URL` plus `WEBRTC_TURN_SECRET` on `backend`. The secret must
+  match coturn's `static-auth-secret`; UbuntuCare derives short-lived client
+  credentials and never sends the shared secret to browsers.
+- Do not enable recording until consent, retention, and storage policies are
+  configured and verified.
+
 ## Monitoring and health
 
 | Endpoint | Expected |

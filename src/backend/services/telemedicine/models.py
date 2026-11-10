@@ -100,7 +100,8 @@ class WaitingRoom(Base, AuditMixin, TenantMixin):
     )
     patient_joined_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     provider_joined_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    session_token: Mapped[Optional[str]] = mapped_column(String(500))
+    invite_token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    invite_expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     room_sid: Mapped[Optional[str]] = mapped_column(String(200))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 

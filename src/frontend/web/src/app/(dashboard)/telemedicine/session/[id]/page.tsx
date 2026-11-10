@@ -1,140 +1,84 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { api } from '@/lib/api-client';
+import { VideoCall, type IceServerConfig } from '@/components/telemedicine/VideoCall';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Video, VideoOff, Mic, MicOff, PhoneOff, MessageSquare, ArrowLeft, Loader2, User } from 'lucide-react';
-import Link from 'next/link';
-import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
-interface Message {
+interface Consultation {
   id: string;
-  sender: 'provider' | 'patient';
-  text: string;
-  timestamp: Date;
+  patient_id: string;
+  provider_id: string;
+  status: string;
+}
+
+interface MediaConfig {
+  ice_servers: IceServerConfig[];
 }
 
 export default function TelemedicineSessionPage() {
-  const params = useParams();
+  const params = useParams<{ id: string }>();
   const router = useRouter();
+  const [session, setSession] = useState<Consultation | null>(null);
+  const [iceServers, setIceServers] = useState<IceServerConfig[]>([]);
   const [loading, setLoading] = useState(true);
-  const [sessionActive, setSessionActive] = useState(true);
-  const [videoEnabled, setVideoEnabled] = useState(true);
-  const [audioEnabled, setAudioEnabled] = useState(true);
-  const [messages, setMessages] = useState<Message[]>([
-    { id: '1', sender: 'provider', text: 'Hello, I can see you. How are you feeling today?', timestamp: new Date() },
-    { id: '2', sender: 'patient', text: 'I have been having headaches for the past week.', timestamp: new Date() },
-  ]);
-  const [newMessage, setNewMessage] = useState('');
-  const [showChat, setShowChat] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1500);
-    return () => clearTimeout(timer);
-  }, []);
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const consultation = await api.get<Consultation>(`/telemedicine/consultations/${encodeURIComponent(params.id)}`);
+        const mediaConfig = await api.get<MediaConfig>(`/telemedicine/consultations/${encodeURIComponent(params.id)}/ice-servers`);
+        await api.post(`/telemedicine/consultations/${encodeURIComponent(params.id)}/start`, {});
+        if (!cancelled) {
+          setSession(consultation);
+          setIceServers(mediaConfig.ice_servers || []);
+        }
+      } catch (loadError) {
+        if (!cancelled) setError(loadError instanceof Error ? loadError.message : 'Unable to open this consultation');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void load();
+    return () => { cancelled = true; };
+  }, [params.id]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const sendMessage = () => {
-    if (!newMessage.trim()) return;
-    setMessages((prev) => [...prev, { id: Date.now().toString(), sender: 'provider', text: newMessage, timestamp: new Date() }]);
-    setNewMessage('');
-  };
-
-  const endCall = () => {
-    setSessionActive(false);
-    toast.info('Call ended');
-    setTimeout(() => router.push('/telemedicine'), 2000);
-  };
+  const endCall = useCallback(async () => {
+    try {
+      await api.post(`/telemedicine/consultations/${encodeURIComponent(params.id)}/complete`, {});
+      router.replace('/telemedicine');
+    } catch (endError) {
+      setError(endError instanceof Error ? endError.message : 'Unable to save the completed consultation');
+    }
+  }, [params.id, router]);
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
+    return <div className="flex min-h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
+  }
+  if (error || !session) {
+    return (
+      <div className="mx-auto max-w-xl space-y-4 rounded-lg border p-6 text-center">
+        <p role="alert" className="text-sm text-muted-foreground">{error || 'Consultation not found'}</p>
+        <Button variant="outline" onClick={() => router.replace('/telemedicine')}>Back to telemedicine</Button>
+      </div>
+    );
   }
 
   return (
-    <div className="flex min-w-0 flex-col lg:h-[calc(100dvh-8rem)] lg:min-h-96">
-      <div className="flex flex-wrap items-center justify-between gap-3 p-3 sm:p-4 bg-card border-b rounded-t-lg">
-        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/telemedicine"><ArrowLeft className="h-4 w-4" /></Link>
-          </Button>
-          <Avatar className="h-10 w-10">
-            <AvatarFallback><User className="h-5 w-5" /></AvatarFallback>
-          </Avatar>
-          <div>
-            <p className="font-medium">Telemedicine Session</p>
-            <p className="text-xs text-muted-foreground">ID: {params.id?.slice(0, 8)}</p>
-          </div>
-          <Badge variant={sessionActive ? 'success' : 'secondary'}>{sessionActive ? 'Active' : 'Ended'}</Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" onClick={() => setVideoEnabled(!videoEnabled)} title={videoEnabled ? 'Disable video' : 'Enable video'}>
-            {videoEnabled ? <Video className="h-5 w-5" /> : <VideoOff className="h-5 w-5 text-red-500" />}
-          </Button>
-          <Button variant="outline" size="icon" onClick={() => setAudioEnabled(!audioEnabled)} title={audioEnabled ? 'Mute' : 'Unmute'}>
-            {audioEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5 text-red-500" />}
-          </Button>
-          <Button variant="outline" size="icon" onClick={() => setShowChat(!showChat)} title={showChat ? 'Hide chat' : 'Show chat'}>
-            <MessageSquare className="h-5 w-5" />
-          </Button>
-          <Button variant="destructive" size="icon" onClick={endCall} title="End call">
-            <PhoneOff className="h-5 w-5" />
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col gap-4 p-2 sm:p-4 lg:flex-row">
-        <div className={`min-h-48 min-w-0 flex-1 bg-muted rounded-lg flex items-center justify-center ${!sessionActive ? 'opacity-50' : ''}`}>
-          {sessionActive ? (
-            <div className="text-center">
-              <Video className="h-16 w-16 mx-auto mb-3 text-muted-foreground" />
-              <p className="text-lg font-medium">Video Feed</p>
-              <p className="text-sm text-muted-foreground">Camera {videoEnabled ? 'active' : 'disabled'}</p>
-            </div>
-          ) : (
-            <div className="text-center">
-              <PhoneOff className="h-16 w-16 mx-auto mb-3 text-red-400" />
-              <p className="text-lg font-medium">Session Ended</p>
-            </div>
-          )}
-        </div>
-
-        {showChat && (
-          <Card className="flex min-h-0 w-full flex-col lg:w-80 lg:shrink-0">
-            <CardHeader className="p-3 border-b">
-              <CardTitle className="text-sm flex items-center gap-2"><MessageSquare className="h-4 w-4" />Chat</CardTitle>
-            </CardHeader>
-            <CardContent className="max-h-64 flex-1 overflow-y-auto lg:max-h-none p-3 space-y-3">
-              {messages.map((msg) => (
-                <div key={msg.id} className={`flex ${msg.sender === 'provider' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] break-words p-2 rounded-lg text-sm ${msg.sender === 'provider' ? 'bg-healthcare-blue text-white' : 'bg-muted'}`}>
-                    <p>{msg.text}</p>
-                    <p className="text-xs opacity-70 mt-1">{msg.timestamp.toLocaleTimeString()}</p>
-                  </div>
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </CardContent>
-            <div className="p-3 border-t flex gap-2">
-              <Textarea
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Type a message..."
-                className="min-h-0 h-9 text-sm resize-none"
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-              />
-              <Button size="sm" onClick={sendMessage}>Send</Button>
-            </div>
-          </Card>
-        )}
-      </div>
+    <div className="space-y-4">
+      <h1 className="text-xl font-bold">Rejoin video consultation</h1>
+      <VideoCall
+        sessionId={session.id}
+        participantName={`Patient ${session.patient_id.slice(0, 8)}`}
+        participantRole="Patient"
+        localRole="provider"
+        iceServers={iceServers}
+        onEnd={endCall}
+      />
     </div>
   );
 }

@@ -1,18 +1,72 @@
-import json
+import base64
+import hashlib
+import hmac
 import logging
+import secrets
+import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-import httpx
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.backend.config import settings
+from src.backend.services.emr.models import Patient
 
 from . import models, schemas
 
 logger = logging.getLogger(__name__)
+
+INVITE_TTL = timedelta(hours=1)
+
+
+def _utc_now_naive() -> datetime:
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def ice_server_config(room_id: str | None = None) -> list[dict]:
+    stun_urls = [url.strip() for url in settings.webrtc_stun_servers.split(",") if url.strip()]
+    servers: list[dict] = [{"urls": stun_urls}] if stun_urls else []
+    turn_urls = [url.strip() for url in settings.webrtc_turn_url.split(",") if url.strip()]
+    if turn_urls and settings.webrtc_turn_secret:
+        username = f"{int(time.time()) + int(INVITE_TTL.total_seconds())}:{room_id or 'ubuntucare'}"
+        credential = base64.b64encode(
+            hmac.new(
+                settings.webrtc_turn_secret.encode("utf-8"),
+                username.encode("utf-8"),
+                hashlib.sha1,
+            ).digest()
+        ).decode("ascii")
+        servers.append({
+            "urls": turn_urls,
+            "username": username,
+            "credential": credential,
+        })
+    return servers
+
+
+async def get_invited_consultation(
+    db: AsyncSession, consultation_id: uuid.UUID, invite_token: str
+) -> Optional[tuple[models.Teleconsultation, models.WaitingRoom]]:
+    result = await db.execute(
+        select(models.Teleconsultation, models.WaitingRoom)
+        .join(models.WaitingRoom, models.WaitingRoom.consultation_id == models.Teleconsultation.id)
+        .where(
+            models.Teleconsultation.id == consultation_id,
+            models.WaitingRoom.is_active.is_(True),
+        )
+    )
+    row = result.one_or_none()
+    if not row:
+        return None
+    consultation, waiting_room = row
+    if waiting_room.invite_expires_at <= _utc_now_naive():
+        return None
+    token_hash = hashlib.sha256(invite_token.encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(waiting_room.invite_token_hash, token_hash):
+        return None
+    return consultation, waiting_room
 
 
 class TelemedicineService:
@@ -21,25 +75,59 @@ class TelemedicineService:
         self.hospital_id = hospital_id
         self.user_id = user_id
 
-    async def create_consultation(self, data: schemas.ConsultationCreate) -> models.Teleconsultation:
+    async def create_consultation(
+        self, data: schemas.ConsultationCreate
+    ) -> tuple[models.Teleconsultation, str]:
+        patient = await self.db.execute(
+            select(Patient.id).where(
+                Patient.id == data.patient_id,
+                Patient.hospital_id == self.hospital_id,
+                Patient.is_active.is_(True),
+            )
+        )
+        if patient.scalar_one_or_none() is None:
+            raise ValueError("Patient not found in your assigned hospital")
+
+        consultation_id = uuid.uuid4()
+        now = _utc_now_naive()
+        invite_token = secrets.token_urlsafe(32)
         consultation = models.Teleconsultation(
+            id=consultation_id,
             hospital_id=self.hospital_id,
             status=models.ConsultationStatus.scheduled,
             created_by=self.user_id,
             **data.model_dump(),
         )
         self.db.add(consultation)
+        await self.db.flush()
 
         waiting_room = models.WaitingRoom(
+            id=uuid.uuid4(),
             hospital_id=self.hospital_id,
             consultation_id=consultation.id,
-            session_token=str(uuid.uuid4()),
+            invite_token_hash=hashlib.sha256(invite_token.encode("utf-8")).hexdigest(),
+            invite_expires_at=now + INVITE_TTL,
             room_sid=f"room_{consultation.id.hex}",
+            is_active=True,
         )
         self.db.add(waiting_room)
         await self.db.flush()
         logger.info(f"Teleconsultation created: {consultation.id}")
-        return consultation
+        return consultation, invite_token
+
+    async def renew_invite(self, consultation_id: uuid.UUID) -> Optional[tuple[str, datetime]]:
+        consultation = await self.get_consultation(consultation_id)
+        if not consultation:
+            return None
+        waiting_room = await self.get_waiting_room(consultation_id)
+        if not waiting_room:
+            return None
+        invite_token = secrets.token_urlsafe(32)
+        expires_at = _utc_now_naive() + INVITE_TTL
+        waiting_room.invite_token_hash = hashlib.sha256(invite_token.encode("utf-8")).hexdigest()
+        waiting_room.invite_expires_at = expires_at
+        await self.db.flush()
+        return invite_token, expires_at
 
     async def get_consultation(self, consultation_id: uuid.UUID) -> Optional[models.Teleconsultation]:
         result = await self.db.execute(
@@ -80,8 +168,16 @@ class TelemedicineService:
         consultation = await self.get_consultation(consultation_id)
         if not consultation:
             return None
+        if consultation.status in {
+            models.ConsultationStatus.completed,
+            models.ConsultationStatus.cancelled,
+            models.ConsultationStatus.no_show,
+        }:
+            raise ValueError("This consultation is no longer joinable")
+        if consultation.status == models.ConsultationStatus.in_progress:
+            return consultation
         consultation.status = models.ConsultationStatus.in_progress
-        consultation.actual_start = datetime.utcnow()
+        consultation.actual_start = _utc_now_naive()
         await self.db.flush()
 
         wr = await self.db.execute(
@@ -91,7 +187,7 @@ class TelemedicineService:
         )
         wr = wr.scalar_one_or_none()
         if wr:
-            wr.provider_joined_at = datetime.utcnow()
+            wr.provider_joined_at = _utc_now_naive()
             await self.db.flush()
 
         logger.info(f"Consultation started: {consultation_id}")
@@ -104,7 +200,7 @@ class TelemedicineService:
         if not consultation:
             return None
         consultation.status = models.ConsultationStatus.completed
-        consultation.actual_end = datetime.utcnow()
+        consultation.actual_end = _utc_now_naive()
         if consultation.actual_start:
             delta = consultation.actual_end - consultation.actual_start
             consultation.duration_minutes = int(delta.total_seconds() / 60)
@@ -152,24 +248,11 @@ class TelemedicineService:
         result = await self.db.execute(
             select(models.WaitingRoom).where(
                 models.WaitingRoom.consultation_id == consultation_id,
+                models.WaitingRoom.hospital_id == self.hospital_id,
                 models.WaitingRoom.is_active == True,
             )
         )
         return result.scalar_one_or_none()
-
-    async def generate_token(self, consultation_id: uuid.UUID) -> Optional[dict]:
-        consultation = await self.get_consultation(consultation_id)
-        if not consultation:
-            return None
-
-        wr = await self.get_waiting_room(consultation_id)
-        return {
-            "room_sid": wr.room_sid if wr else f"room_{consultation_id.hex}",
-            "token_type": "temporary",
-            "expires_in": 3600,
-            "identity_patient": str(consultation.patient_id),
-            "identity_provider": str(consultation.provider_id),
-        }
 
     async def add_recording(
         self, consultation_id: uuid.UUID, data: schemas.RecordingCreate
@@ -230,45 +313,6 @@ class EPrescriptionService:
             return None
         prescription.status = models.PrescriptionStatus.signed
         prescription.signed_by = signed_by
-        prescription.signed_at = datetime.utcnow()
+        prescription.signed_at = _utc_now_naive()
         await self.db.flush()
         return prescription
-
-
-class WebRTCService:
-    """WebRTC signaling helper for telemedicine sessions."""
-
-    @staticmethod
-    def create_offer(room_sid: str, identity: str) -> dict:
-        return {
-            "type": "offer",
-            "room": room_sid,
-            "identity": identity,
-            "sdp": None,
-            "ice_servers": [
-                {"urls": ["stun:stun.l.google.com:19302"]},
-                {
-                    "urls": "turn:turn.ubuntucare.zm:3478",
-                    "username": "ubuntucare",
-                    "credential": "secure-turn-credential",
-                },
-            ],
-        }
-
-    @staticmethod
-    def create_answer(offer: dict, identity: str) -> dict:
-        return {
-            "type": "answer",
-            "room": offer.get("room"),
-            "identity": identity,
-            "sdp": None,
-        }
-
-    @staticmethod
-    def ice_candidate(candidate: str, sdp_mid: str, sdp_mline_index: int) -> dict:
-        return {
-            "type": "ice_candidate",
-            "candidate": candidate,
-            "sdpMid": sdp_mid,
-            "sdpMLineIndex": sdp_mline_index,
-        }

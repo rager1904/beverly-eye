@@ -1,9 +1,12 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from redis.asyncio import Redis
 
+from src.backend.config import settings
 from src.backend.security.rbac.middleware import setup_rbac_middleware
 
 from .routers import consultations
@@ -13,6 +16,22 @@ logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        redis = Redis.from_url(
+            settings.redis_url,
+            decode_responses=True,
+            max_connections=50,
+            socket_connect_timeout=3,
+            socket_timeout=5,
+        )
+        await redis.ping()
+        app.state.redis = redis
+        try:
+            yield
+        finally:
+            await redis.aclose()
+
     app = FastAPI(
         title="Telemedicine Service - UbuntuCare Zambia",
         description="Telemedicine with WebRTC signaling, session management, "
@@ -20,6 +39,7 @@ def create_app() -> FastAPI:
         version="1.0.0",
         docs_url="/docs",
         redoc_url="/redoc",
+        lifespan=lifespan,
     )
 
     app.add_middleware(

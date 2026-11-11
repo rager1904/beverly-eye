@@ -19,12 +19,14 @@ class ClinicalNoteSaveTests(unittest.IsolatedAsyncioTestCase):
             patient_id=patient_id,
             note_type="SOAP",
             subjective="Test note",
+            eye_details={"problem": "Blurred vision", "k1": "43.00 D"},
             authored_by="client-supplied author",
             authored_datetime=datetime.now(timezone.utc),
         )
 
         note = await service.create_note(data)
 
+        self.assertEqual(note.eye_details, {"problem": "Blurred vision", "k1": "43.00 D"})
         self.assertEqual(note.hospital_id, hospital_id)
         self.assertEqual(note.created_by, "staff-id")
         self.assertEqual(note.authored_by, "doctor")
@@ -60,6 +62,7 @@ class ClinicalNoteSaveTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(note.patient_id, patient_id)
         self.assertEqual(note.encounter_id, encounter_id)
+
         self.assertEqual(note.hospital_id, hospital_id)
         db.add.assert_called_once_with(note)
 

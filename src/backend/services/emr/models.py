@@ -11,6 +11,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Integer,
+    JSON,
     Numeric,
     String,
     Text,
@@ -460,6 +461,7 @@ class ClinicalNote(Base, AuditMixin, TenantMixin):
         UUID(as_uuid=True), ForeignKey("patients.id"), index=True
     )
     note_type: Mapped[NoteType] = mapped_column(Enum(NoteType, native_enum=False, values_callable=lambda enum: [item.value for item in enum]))
+    eye_details: Mapped[Optional[dict[str, str]]] = mapped_column(JSON)
     title: Mapped[Optional[str]] = mapped_column(String(500))
 
     subjective: Mapped[Optional[str]] = mapped_column(Text)

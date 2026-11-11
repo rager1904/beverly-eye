@@ -459,6 +459,14 @@ export interface PatientSearchResult {
   phone: string;
   nrc_number?: string | null;
   province?: string | null;
+  address_line?: string | null;
+  city?: string | null;
+  insurance_provider?: string | null;
+  insurance_number?: string | null;
+  nhima_member?: boolean;
+  nhima_number?: string | null;
+  emergency_contact_name?: string | null;
+  emergency_contact_phone?: string | null;
 }
 
 export interface PaginatedResponse<T> {

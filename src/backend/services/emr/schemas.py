@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Annotated, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, field_validator
 
@@ -427,7 +427,11 @@ class FamilyHistoryResponse(BaseModel):
 
 
 # ─── ClinicalNote ───────────────────────────────────────────────────────────────
+EyeNoteDetails = Annotated[dict[str, Annotated[str, Field(max_length=8000)]], Field(max_length=40)]
+
+
 class ClinicalNoteCreate(BaseModel):
+    eye_details: Optional[EyeNoteDetails] = None
     encounter_id: Optional[uuid.UUID] = None
     patient_id: uuid.UUID
     note_type: NoteType
@@ -445,6 +449,7 @@ class ClinicalNoteCreate(BaseModel):
 
 
 class ClinicalNoteUpdate(BaseModel):
+    eye_details: Optional[EyeNoteDetails] = None
     model_config = ConfigDict(extra="forbid")
 
     title: Optional[str] = Field(None, max_length=500)
@@ -459,6 +464,7 @@ class ClinicalNoteUpdate(BaseModel):
 
 
 class ClinicalNoteResponse(BaseModel):
+    eye_details: Optional[EyeNoteDetails] = None
     id: uuid.UUID
     encounter_id: Optional[uuid.UUID] = None
     patient_id: uuid.UUID

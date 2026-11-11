@@ -1,5 +1,7 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
+import { EyeNoteFields, type EyeDetails } from '@/components/EyeNoteFields';
 import { api } from '@/lib/api-client';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -22,6 +24,7 @@ interface ClinicalNote {
   patient_id: string;
   note_type: string;
   title?: string;
+  eye_details?: EyeDetails | null;
   subjective: string;
   objective: string;
   assessment: string;
@@ -351,6 +354,7 @@ function formatDate(iso: string) {
 
 export default function ClinicalNotesPage() {
   const token = useAuthStore((s) => s.accessToken);
+  const userId = useAuthStore((s) => s.user?.id);
 
   const [notes, setNotes] = useState<ClinicalNote[]>([]);
   const [loading, setLoading] = useState(true);
@@ -369,6 +373,7 @@ export default function ClinicalNotesPage() {
   const [assessment, setAssessment] = useState('');
   const [plan, setPlan] = useState('');
   const [title, setTitle] = useState('');
+  const [eyeDraft, setEyeDraft] = useState<EyeDetails>({});
 
   const [aiLoading, setAiLoading] = useState(false);
   const [aiSuggestion, setAiSuggestion] = useState('');
@@ -391,13 +396,36 @@ export default function ClinicalNotesPage() {
 
   const selectedNote = notes.find((n) => n.id === selectedNoteId);
 
+  const isEyeNote = noteSpecialty === 'eye';
+  const eyePatientQuery = useQuery({
+    queryKey: ['eye-note-patient', selectedPatient?.id, userId],
+    queryFn: () => api.get<PatientSearchResult>(`/emr/patients/${selectedPatient?.id}`),
+    enabled: Boolean(isEyeNote && selectedPatient && token),
+  });
+  const eyePatient = eyePatientQuery.data ?? selectedPatient;
+  const eyeDetails = {
+    ...(eyePatient ? {
+      name: [eyePatient.first_name, eyePatient.last_name].filter(Boolean).join(' '),
+      date_of_birth: eyePatient.date_of_birth,
+      telephone: eyePatient.phone,
+      address: [eyePatient.address_line, eyePatient.city].filter(Boolean).join(', '),
+      medical_aid: eyePatient.insurance_provider || (eyePatient.nhima_member ? 'NHIMA' : ''),
+      member: eyePatient.insurance_number || eyePatient.nhima_number || '',
+      next_of_kin: [eyePatient.emergency_contact_name, eyePatient.emergency_contact_phone].filter(Boolean).join(' · '),
+    } : {}),
+    ...eyeDraft,
+  };
+  const hasSoapContent = Boolean(subjective || objective || assessment || plan);
+  const hasEyeContent = Object.values(eyeDraft).some((value) => value.trim());
+
   const handleSelectNote = useCallback((note: ClinicalNote) => {
     urlContextRequestId.current += 1;
     setAssociationLoading(false);
     setSelectedNoteId(note.id);
     setSelectedEncounterId(null);
     const titleLower = note.title?.toLowerCase() ?? '';
-    setNoteSpecialty(titleLower.includes('dental') ? 'dental' : titleLower.includes('eye') || titleLower.includes('ophthalm') ? 'eye' : 'general');
+    setEyeDraft(note.eye_details ?? {});
+    setNoteSpecialty(note.eye_details ? 'eye' : titleLower.includes('dental') ? 'dental' : titleLower.includes('eye') || titleLower.includes('ophthalm') ? 'eye' : 'general');
     setSelectedPatient(null);
     setPatientQuery('');
     setTitle(note.title || '');
@@ -417,6 +445,7 @@ export default function ClinicalNotesPage() {
     setSelectedEncounterId(null);
     setPatientQuery('');
     setTitle('');
+    setEyeDraft({});
     setSubjective('');
     setObjective('');
     setAssessment('');
@@ -481,14 +510,15 @@ export default function ClinicalNotesPage() {
       toast.error('Select a patient before saving a new clinical note');
       return;
     }
-    if (!subjective && !objective && !assessment && !plan) {
+    if (!hasSoapContent && !(isEyeNote && hasEyeContent)) {
       toast.error('Add content before saving');
       return;
     }
     setSaving(true);
     try {
       const body: Record<string, unknown> = {
-        title: title || `${NOTE_TEMPLATES[noteSpecialty].label} SOAP Note`,
+        title: title || (isEyeNote ? 'Eye Clinic Note' : `${NOTE_TEMPLATES[noteSpecialty].label} SOAP Note`),
+        ...(isEyeNote ? { eye_details: eyeDetails } : {}),
         subjective,
         objective,
         assessment,
@@ -554,9 +584,9 @@ export default function ClinicalNotesPage() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
             <h1 className="text-2xl font-bold">Eye &amp; Dental Clinical Notes</h1>
-            <p className="text-sm text-muted-foreground">SOAP documentation for the General, Eye, and Dental departments.</p>
+            <p className="text-sm text-muted-foreground">Clinical documentation for the General, Eye, and Dental departments.</p>
         </div>
-        <Button onClick={handleNewNote} disabled={!selectedNoteId && !subjective && !objective && !assessment && !plan}>
+        <Button onClick={handleNewNote} disabled={!selectedNoteId && !hasSoapContent && !hasEyeContent}>
           <Plus className="h-4 w-4 mr-1" />New Note
         </Button>
       </div>
@@ -611,6 +641,7 @@ export default function ClinicalNotesPage() {
                           type="button"
                           className="block w-full px-3 py-2 text-left hover:bg-muted"
                           onClick={() => {
+                            setEyeDraft({});
                             setSelectedPatient(patient);
                             setPatientQuery('');
                           }}
@@ -647,7 +678,7 @@ export default function ClinicalNotesPage() {
             </Select>
             <p className="text-xs text-muted-foreground">
               {noteSpecialty === 'eye'
-                ? 'Prompts cover laterality, visual acuity, pupils, eye movements, IOP, slit-lamp and fundus findings.'
+                ? 'Record patient details, history, examination and diagnosis.'
                 : noteSpecialty === 'dental'
                   ? 'Prompts cover tooth/site, pain, oral examination, periodontal findings, treatment and follow-up.'
                   : 'Prompts cover general history, examination, assessment, investigations, and follow-up.'}
@@ -704,6 +735,11 @@ export default function ClinicalNotesPage() {
         <div className="lg:col-span-3 space-y-4">
           <VoiceRecorder
             onTranscriptionComplete={(text) => {
+              if (isEyeNote) {
+                setEyeDraft((draft) => ({ ...draft, problem: [draft.problem, text].filter(Boolean).join('\n') }));
+                toast.success('Transcription added to Problem');
+                return;
+              }
               const parsed = parseSOAPText(text);
               if (parsed) {
                 if (parsed.subjective) setSubjective((prev) => prev + (prev ? '\n' : '') + parsed.subjective);
@@ -723,15 +759,15 @@ export default function ClinicalNotesPage() {
               <div className="flex items-center gap-2">
                 <CardTitle className="flex items-center gap-2 text-base">
                   {noteSpecialty === 'eye' ? <Eye className="h-4 w-4" /> : <Stethoscope className="h-4 w-4" />}
-                  {NOTE_TEMPLATES[noteSpecialty].label} SOAP Note
+                  {isEyeNote ? 'Eye Clinic Note' : `${NOTE_TEMPLATES[noteSpecialty].label} SOAP Note`}
                 </CardTitle>
                 {selectedNote && <Badge variant="secondary">{selectedNote.note_type}</Badge>}
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handleAiAssist} disabled={aiLoading}>
+                {!isEyeNote && <Button variant="outline" size="sm" onClick={handleAiAssist} disabled={aiLoading}>
                   <Sparkles className={`h-4 w-4 mr-1 ${aiLoading ? 'animate-spin' : ''}`} />
                   AI Assist
-                </Button>
+                </Button>}
                 <Button size="sm" onClick={handleSave} disabled={saving || associationLoading}>
                   {saving ? (
                     <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -757,7 +793,7 @@ export default function ClinicalNotesPage() {
                 <TabsList className="mb-4">
                   <TabsTrigger value="edit">Edit</TabsTrigger>
                   <TabsTrigger value="preview">Preview</TabsTrigger>
-                  {aiSuggestion && (
+                  {!isEyeNote && aiSuggestion && (
                     <TabsTrigger value="ai-suggest">
                       AI Suggestion <Badge variant="info" className="ml-1 text-xs">New</Badge>
                     </TabsTrigger>
@@ -765,66 +801,78 @@ export default function ClinicalNotesPage() {
                 </TabsList>
 
                 <TabsContent value="edit" className="space-y-3">
-                  <div>
-                    <label className="text-xs font-medium mb-1 block text-muted-foreground flex items-center gap-1">
-                      <Mic className="h-3 w-3" /> Subjective
-                    </label>
-                    <Textarea
-                      placeholder={NOTE_TEMPLATES[noteSpecialty].subjective}
-                      value={subjective}
-                      onChange={(e) => setSubjective(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium mb-1 block text-muted-foreground">Objective</label>
-                    <Textarea
-                      placeholder={NOTE_TEMPLATES[noteSpecialty].objective}
-                      value={objective}
-                      onChange={(e) => setObjective(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium mb-1 block text-muted-foreground">Assessment</label>
-                    <Textarea
-                      placeholder={NOTE_TEMPLATES[noteSpecialty].assessment}
-                      value={assessment}
-                      onChange={(e) => setAssessment(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium mb-1 block text-muted-foreground">Plan</label>
-                    <Textarea
-                      placeholder={NOTE_TEMPLATES[noteSpecialty].plan}
-                      value={plan}
-                      onChange={(e) => setPlan(e.target.value)}
-                      rows={3}
-                    />
-                  </div>
+                  {isEyeNote && eyePatientQuery.isError && (
+                    <p role="status" className="text-sm text-muted-foreground">Some patient details could not be loaded. You can enter them manually.</p>
+                  )}
+                  {isEyeNote && <EyeNoteFields values={eyeDetails} onChange={(key, value) =>
+                    setEyeDraft((draft) => ({ ...draft, [key]: value }))
+                  } />}
+                  {(!isEyeNote || hasSoapContent) && <div className="space-y-3">
+                    {isEyeNote && <p className="text-sm font-medium">SOAP entries</p>}
+                    <div>
+                      <label className="text-xs font-medium mb-1 block text-muted-foreground flex items-center gap-1">
+                        <Mic className="h-3 w-3" /> Subjective
+                      </label>
+                      <Textarea
+                        placeholder={NOTE_TEMPLATES[noteSpecialty].subjective}
+                        value={subjective}
+                        onChange={(e) => setSubjective(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium mb-1 block text-muted-foreground">Objective</label>
+                      <Textarea
+                        placeholder={NOTE_TEMPLATES[noteSpecialty].objective}
+                        value={objective}
+                        onChange={(e) => setObjective(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium mb-1 block text-muted-foreground">Assessment</label>
+                      <Textarea
+                        placeholder={NOTE_TEMPLATES[noteSpecialty].assessment}
+                        value={assessment}
+                        onChange={(e) => setAssessment(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium mb-1 block text-muted-foreground">Plan</label>
+                      <Textarea
+                        placeholder={NOTE_TEMPLATES[noteSpecialty].plan}
+                        value={plan}
+                        onChange={(e) => setPlan(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                  </div>}
                 </TabsContent>
 
                 <TabsContent value="preview" className="space-y-3 prose prose-sm max-w-none">
-                  <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground">S:</h4>
-                    <p className="text-sm">{subjective || 'No data entered'}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground">O:</h4>
-                    <p className="text-sm">{objective || 'No data entered'}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground">A:</h4>
-                    <p className="text-sm">{assessment || 'No data entered'}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-semibold text-muted-foreground">P:</h4>
-                    <p className="text-sm">{plan || 'No data entered'}</p>
-                  </div>
+                  {isEyeNote && <EyeNoteFields values={eyeDetails} />}
+                  {(!isEyeNote || hasSoapContent) && <div className="space-y-3">
+                    <div>
+                      <h4 className="text-xs font-semibold text-muted-foreground">S:</h4>
+                      <p className="text-sm">{subjective || 'No data entered'}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-muted-foreground">O:</h4>
+                      <p className="text-sm">{objective || 'No data entered'}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-muted-foreground">A:</h4>
+                      <p className="text-sm">{assessment || 'No data entered'}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-semibold text-muted-foreground">P:</h4>
+                      <p className="text-sm">{plan || 'No data entered'}</p>
+                    </div>
+                  </div>}
                 </TabsContent>
 
-                {aiSuggestion && (
+                {!isEyeNote && aiSuggestion && (
                   <TabsContent value="ai-suggest">
                     <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
                       <div className="flex items-center gap-2 mb-2">
